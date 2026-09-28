@@ -209,6 +209,9 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line//\{tls4pda\}/$TEMP_DIR/tls_clienthello_4pda_to.bin}"
     line="${line//\{tlsmax\}/$TEMP_DIR/tls_clienthello_max_ru.bin}"
     line="${line//\{stun\}/$TEMP_DIR/stun.bin}"
+    line="${line//\{stun2\}/$TEMP_DIR/stun2.bin}"
+    line="${line//\{tlssochi\}/$TEMP_DIR/tls_clienthello_sochi_park.bin}"
+    line="${line//\{quic4pda\}/$TEMP_DIR/quic_initial_4pda_to.bin}"
     line="${line//\{dbankcloud\}/$TEMP_DIR/quic_initial_dbankcloud_ru.bin}"
 
     # ЗАМЕНЯЕМ {GameFilter} НА ЗНАЧЕНИЕ В ЗАВИСИМОСТИ ОТ ПРОТОКОЛА

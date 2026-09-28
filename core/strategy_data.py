@@ -10,6 +10,8 @@ def natural_sort_key(text):
 # Данные стратегий для сборки своей стратегии
 STRATEGY_OPTIONS = {
     "YouTube TCP": {
+        "Flowseal general (09.2026)": "--filter-tcp=443 --hostlist={list_google} --ip-id=zero --dpi-desync=multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern={tlsgoogle} --new",
+        "Flowseal EXP (09.2026)": "--filter-tcp=443 --hostlist={list_google} --ip-id=zero --dpi-desync=hostfakesplit --dpi-desync-fooling=ts --dpi-desync-hostfakesplit-mod=host=www.google.com --new",
         "multisplit seqovl midsld": "--filter-tcp=443 --hostlist={youtube} --dpi-desync=multisplit --dpi-desync-split-seqovl=1 --dpi-desync-split-pos=midsld-1 --new",
         "multidisorder seqovl midsld": "--filter-tcp=80,443  --hostlist={youtube}  --dpi-desync=multidisorder  --dpi-desync-split-seqovl=1  --dpi-desync-split-pos=midsld-1 --new",
         "original bolvan v2 badsum": "--filter-tcp=443 --hostlist={youtube} --dpi-desync=fake,multidisorder --dpi-desync-split-pos=1,midsld --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com --new",
@@ -28,6 +30,8 @@ STRATEGY_OPTIONS = {
     },
 
     "GoogleVideo": {
+        "Flowseal general (09.2026)": "--filter-tcp=443 --hostlist={list_google} --ip-id=zero --dpi-desync=multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern={tlsgoogle} --new",
+        "Flowseal EXP (09.2026)": "--filter-tcp=443 --hostlist={list_google} --ip-id=zero --dpi-desync=hostfakesplit --dpi-desync-fooling=ts --dpi-desync-hostfakesplit-mod=host=www.google.com --new",
         "GoogleVideo FakedDisorder datanoack": "--filter-tcp=443 --hostlist-domains=googlevideo.com --dpi-desync=fake,fakeddisorder --dpi-desync-fooling=datanoack --dpi-desync-split-pos=midsld --dpi-desync-fake-tls=0x00000000 --new",
         "multidisorder midsld": "--filter-tcp=443 --hostlist-domains=googlevideo.com --dpi-desync=multidisorder --dpi-desync-split-pos=1,midsld --new",
         "GoogleVideo FakedSplit badseq": "--filter-tcp=443 --hostlist-domains=googlevideo.com --dpi-desync=fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=10 --dpi-desync-ttl=4 --new",
@@ -40,6 +44,8 @@ STRATEGY_OPTIONS = {
     },
 
     "Discord": {
+        "Flowseal general (09.2026)": "--filter-tcp=2053,2083,2087,2096,8443 --hostlist-domains=discord.media --dpi-desync=multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern={tlsgoogle} --new",
+        "Flowseal ALT13 (09.2026)": "--filter-tcp=2053,2083,2087,2096,8443 --hostlist-domains=discord.media --dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=7 --dpi-desync-split-seqovl-pattern={tlsgoogle} --dpi-desync-fake-tls={tlsgoogle} --new",
         "YTDisBystro 3.4v1 (all ports)": "--filter-tcp=443,2053,2083,2087,2096,8443 --hostlist={discord} --dpi-desync=multisplit --dpi-desync-split-seqovl=211 --dpi-desync-split-seqovl-pattern={tlsclienthello_5} --new",
         "general (altv2) 1.6.1": "--filter-tcp=443,2053,2083,2087,2096,8443 --hostlist={discord} --dpi-desync=split2 --dpi-desync-split-seqovl=652 --dpi-desync-split-pos=2 --dpi-desync-split-seqovl-pattern={tlsgoogle} --new",
         "Dronator 4.2": "--filter-tcp=443,2053,2083,2087,2096,8443 --hostlist={discord} --dpi-desync=fake --dpi-desync-fake-tls-mod=rnd,dupsid --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=0 --new",
@@ -88,6 +94,7 @@ STRATEGY_OPTIONS = {
     },
 
     "Telegram TCP": {
+        "Flowseal general (09.2026)": "--filter-tcp=80,443 --hostlist={list_general} --hostlist={list_general_user} --hostlist-exclude={list_exclude} --hostlist-exclude={list_exclude_user} --ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} --dpi-desync=multisplit --dpi-desync-split-seqovl=568 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern={tls4pda} --new",
         "YTDisBystro 3.4v1 (all ports)": "--filter-tcp=80,443 --hostlist={telegram} --dpi-desync=multisplit --dpi-desync-split-seqovl=211 --dpi-desync-split-seqovl-pattern={tlsclienthello_5} --new",
         "multidisorder seqovl 211 & pattern 5": "--filter-tcp=80,443 --hostlist={telegram} --dpi-desync=multidisorder --dpi-desync-split-seqovl=211 --dpi-desync-split-seqovl-pattern={tlsclienthello_5} --new",
         "multisplit split pos 1": "--filter-tcp=80,443 --hostlist={telegram} --dpi-desync=multisplit --dpi-desync-split-pos=1 --new",
@@ -131,6 +138,8 @@ STRATEGY_OPTIONS = {
     },
 
     "Hostlist (https)": {
+        "Flowseal general (09.2026)": "--filter-tcp=80,443 --hostlist={list_general} --hostlist={list_general_user} --hostlist-exclude={list_exclude} --hostlist-exclude={list_exclude_user} --ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} --dpi-desync=multisplit --dpi-desync-split-seqovl=568 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern={tls4pda} --new",
+        "Flowseal EXP (09.2026)": "--filter-tcp=80,443 --hostlist={list_general} --hostlist={list_general_user} --hostlist-exclude={list_exclude} --hostlist-exclude={list_exclude_user} --ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} --dpi-desync=fake,multisplit --dpi-desync-split-seqovl=480 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=4 --dpi-desync-split-seqovl-pattern={stun2} --dpi-desync-fake-tls={tlsmax} --dpi-desync-fake-http={tlsmax} --new",
         "YTDisBystro 3.4v1 (all ports)": "--filter-tcp=443 --hostlist={netrogat} --new --filter-tcp=443 --hostlist={other} --hostlist={other2} --hostlist={russia_blacklist} --dpi-desync=multisplit --dpi-desync-split-seqovl=211 --dpi-desync-split-seqovl-pattern={tlsclienthello_5} --new",
         "multidisorder seqovl 211 & pattern 5": "--filter-tcp=443 --hostlist={netrogat} --new --filter-tcp=443 --hostlist={other} --hostlist={other2} --hostlist={russia_blacklist} --dpi-desync=multidisorder --dpi-desync-split-seqovl=211 --dpi-desync-split-seqovl-pattern={tlsclienthello_5} --new",
         "multisplit split pos 1": "--filter-tcp=443 --hostlist={netrogat} --new --filter-tcp=443 --hostlist={other} --hostlist={other2} --hostlist={russia_blacklist} --dpi-desync=multisplit --dpi-desync-split-pos=1 --new",
@@ -161,6 +170,7 @@ STRATEGY_OPTIONS = {
     },
 
     "Ipset TCP": {
+        "Flowseal general (09.2026)": "--filter-tcp=80,443,8443 --ipset={ipset_all} --ipset={ipset_all_user} --hostlist-exclude={list_exclude} --hostlist-exclude={list_exclude_user} --ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} --dpi-desync=multisplit --dpi-desync-split-seqovl=568 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern={tls4pda} --new",
         "general (Rockstar Epic) 1.8.2": "--filter-tcp=6695-6705 --dpi-desync=fake,split2 --dpi-desync-repeats=8 --dpi-desync-fooling=md5sig --dpi-desync-autottl=2 --dpi-desync-fake-tls={tlsgoogle} --new --filter-tcp=80,443,444-65535 --ipset={russia_youtube_rtmps} --ipset={ipset_all} --ipset={ipset_base} --ipset={ipset_all2} --ipset={cloudflare_ipset} --ipset={ipset_cloudflare1} --ipset={ipset_cloudflare} --ipset={ipset_discord} --ipset-exclude={ipset_dns} --dpi-desync=fake,multisplit --dpi-desync-repeats=6 --dpi-desync-fooling=md5sig --dpi-desync-fake-tls={tlsgoogle} --new",
         "general (battlefield) 1.8.5": "--filter-tcp=6695-6705 --dpi-desync=fake,split2 --dpi-desync-repeats=8 --dpi-desync-fooling=md5sig --dpi-desync-autottl=2 --dpi-desync-fake-tls={tlsgoogle} --new --filter-tcp=80,443,444-65535 --ipset={russia_youtube_rtmps} --ipset={ipset_all} --ipset={ipset_base} --ipset={ipset_all2} --ipset={cloudflare_ipset} --ipset={ipset_cloudflare1} --ipset={ipset_cloudflare} --ipset={ipset_discord} --ipset-exclude={ipset_dns} --dpi-desync=fake,fakedsplit --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fakedsplit-pattern=0x00 --dpi-desync-fake-tls={tlsgoogle} --new",
         "general (battlefield) 2.0": "--filter-tcp=6695-6705 --dpi-desync=fake,split2 --dpi-desync-repeats=8 --dpi-desync-fooling=md5sig --dpi-desync-autottl=2 --dpi-desync-fake-tls={tlsgoogle} --new --filter-tcp=80,443,444-65535 --ipset={russia_youtube_rtmps} --ipset={ipset_all} --ipset={ipset_base} --ipset={ipset_all2} --ipset={cloudflare_ipset} --ipset={ipset_cloudflare1} --ipset={ipset_cloudflare} --ipset={ipset_discord} --ipset-exclude={ipset_dns}  --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fake-tls-mod=none --dpi-desync-fooling=badseq --new",
@@ -183,6 +193,7 @@ STRATEGY_OPTIONS = {
     },
 
     "Ipset UDP": {
+        "Flowseal general (09.2026)": "--filter-udp=443 --ipset={ipset_all} --ipset={ipset_all_user} --hostlist-exclude={list_exclude} --hostlist-exclude={list_exclude_user} --ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fake-quic={quicgoogle} --new",
         "Apex Legends & Rockstar v1": "--filter-udp=* --ipset={ipset_all} --ipset={ipset_base} --ipset={ipset_all2} --ipset={cloudflare_ipset} --ipset={ipset_cloudflare1} --ipset={ipset_cloudflare} --ipset-exclude={ipset_dns} --dpi-desync=fake --dpi-desync-repeats=2 --dpi-desync-cutoff=n2 --dpi-desync-fake-quic={quicgoogle} --new",
         "Rockstar v3": "--filter-udp=* --ipset={ipset_all} --ipset={ipset_base} --ipset={ipset_all2} --ipset={cloudflare_ipset} --ipset={ipset_cloudflare1} --ipset={ipset_cloudflare} --ipset-exclude={ipset_dns} --dpi-desync=fake --dpi-desync-repeats=2 --dpi-desync-cutoff=n2 --dpi-desync-fake-quic={quic_test_00} --new",
         "General-BF 3.2": "--filter-udp=* --ipset={ipset_all} --ipset={ipset_base} --ipset={ipset_all2} --ipset={cloudflare_ipset} --ipset={ipset_cloudflare1} --ipset={ipset_cloudflare} --ipset-exclude={ipset_dns} --dpi-desync=fake --dpi-desync-any-protocol=1 --dpi-desync-autottl=2 --dpi-desync-repeats=9 --dpi-desync-fake-unknown-udp={quicgoogle} --dpi-desync-cutoff=n2 --new",
