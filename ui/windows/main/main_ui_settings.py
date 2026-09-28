@@ -27,7 +27,7 @@ class MainUISettingsMixin:
         menu_y = self.settings_icon.winfo_rooty() + self.settings_icon.winfo_height()
 
         f = logical_ui_scale(self.root)
-        base_menu_w, base_menu_h = 240, 385
+        base_menu_w, base_menu_h = 240, 425
         menu_w = int(round(base_menu_w * f))
         menu_h = int(round(base_menu_h * f))
         fz = max(9, int(round(11 * f)))
@@ -63,6 +63,7 @@ class MainUISettingsMixin:
             ("Настройки DNS", self.open_dns_settings),
             ("Разблокировать сервисы", self.open_service_unlock),
             ("Обновить Zapret", self.open_update_settings),
+            ("Забыть пароль sudo", self.forget_sudo_password),
             ("Удалить Zapret", self.uninstall_zapret)
         ]
         menu_button_style["width"] = max(
@@ -174,6 +175,18 @@ class MainUISettingsMixin:
     def open_update_settings(self):
         """Открывает окно обновления Zapret"""
         show_update_window(self.root)
+
+    def forget_sudo_password(self):
+        """Удаляет запомненный пароль sudo (кэш askpass, ~/.cache/zapret_dpi_manager)."""
+        from core.sudo_helper import forget_cached_password, has_cached_password
+
+        self.close_settings_menu()
+        if not has_cached_password():
+            self.show_status_message("Запомненного пароля нет", warning=True)
+        elif forget_cached_password():
+            self.show_status_message("Запомненный пароль sudo удалён", success=True)
+        else:
+            self.show_status_message("Не удалось удалить запомненный пароль", error=True)
 
     def uninstall_zapret(self):
         """Запускает удаление Zapret"""

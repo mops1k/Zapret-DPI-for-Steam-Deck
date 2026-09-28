@@ -46,6 +46,17 @@ def distro_log_label():
     )
 
 
+def detect_fwtype():
+    """Единый источник истины для /opt/zapret/FWTYPE.
+
+    nftables — если доступен nft, иначе iptables. Иначе бэкенд зависел бы от
+    способа установки (ярлык клал nftables, GUI-путь — iptables).
+    """
+    if shutil.which("nft"):
+        return "nftables"
+    return "iptables"
+
+
 def is_ostree_boot():
     return os.path.isfile("/run/ostree-booted")
 

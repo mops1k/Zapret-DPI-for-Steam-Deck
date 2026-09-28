@@ -1,4 +1,6 @@
 #!/bin/bash
+# Строгий режим: ошибка конфигурации или правил не должна давать «работающую» службу.
+set -euo pipefail
 
 if [ "$EUID" -ne 0 ]; then
   echo "Please run as root"
@@ -10,9 +12,9 @@ DETECTED_USER=""
 CURRENT_HOME=""
 
 # Способ 1: Используем SUDO_USER (если скрипт запущен через sudo)
-if [ -n "$SUDO_USER" ]; then
+if [ -n "${SUDO_USER:-}" ]; then
     DETECTED_USER="$SUDO_USER"
-    CURRENT_HOME=$(getent passwd "$SUDO_USER" 2>/dev/null | cut -d: -f6)
+    CURRENT_HOME=$(getent passwd "$SUDO_USER" 2>/dev/null | cut -d: -f6 || true)
 fi
 
 # Способ 2: Проверяем наличие конфигурации у текущего пользователя сессии
@@ -20,7 +22,7 @@ if [ -z "$DETECTED_USER" ] || [ ! -f "$CURRENT_HOME/Zapret_DPI_Manager/config.tx
     # Пробуем определить реального пользователя
     REAL_USER=$(logname 2>/dev/null || echo "")
     if [ -n "$REAL_USER" ] && [ "$REAL_USER" != "root" ]; then
-        home=$(getent passwd "$REAL_USER" 2>/dev/null | cut -d: -f6)
+        home=$(getent passwd "$REAL_USER" 2>/dev/null | cut -d: -f6 || true)
         if [ -n "$home" ] && [ -f "$home/Zapret_DPI_Manager/config.txt" ]; then
             DETECTED_USER="$REAL_USER"
             CURRENT_HOME="$home"
@@ -77,7 +79,7 @@ echo "Using Zapret DPI Manager installation for user: $DETECTED_USER"
 echo "Home directory: $CURRENT_HOME"
 echo "Config file: $CONFIG_FILE"
 
-if pidof "nfqws" > /dev/null; then
+if pidof /opt/zapret/nfqws > /dev/null 2>&1; then
     echo "nfqws is already running."
     exit 0
 fi
@@ -155,7 +157,7 @@ GAME_FILTER_FILE="$CURRENT_HOME/Zapret_DPI_Manager/utils/gamefilter.enable"
 GAME_FILTER_MODE_FILE="$CURRENT_HOME/Zapret_DPI_Manager/utils/gamefilter.mode"
 GAME_FILTER_MODE="both"
 if [ -f "$GAME_FILTER_MODE_FILE" ]; then
-    GAME_FILTER_MODE=$(head -n 1 "$GAME_FILTER_MODE_FILE" | tr -d '\r\n' | tr '[:upper:]' '[:lower:]')
+    GAME_FILTER_MODE=$(head -n 1 "$GAME_FILTER_MODE_FILE" | tr -d '\r\n' | tr '[:upper:]' '[:lower:]' || true)
 fi
 if [ "$GAME_FILTER_MODE" != "tcp" ] && [ "$GAME_FILTER_MODE" != "udp" ] && [ "$GAME_FILTER_MODE" != "both" ]; then
     GAME_FILTER_MODE="both"
@@ -214,6 +216,25 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line//\{quic4pda\}/$TEMP_DIR/quic_initial_4pda_to.bin}"
     line="${line//\{dbankcloud\}/$TEMP_DIR/quic_initial_dbankcloud_ru.bin}"
 
+    # Алиасы наборов конструктора стратегий: у менеджера один общий ipset-файл
+    # (ipset-all_merged) и один общий hostlist (list-general_merged).
+    line="${line//\{ipset_all2\}/$TEMP_DIR/ipset-all_merged.txt}"
+    line="${line//\{ipset_base\}/$TEMP_DIR/ipset-all_merged.txt}"
+    line="${line//\{ipset_cloudflare\}/$TEMP_DIR/ipset-all_merged.txt}"
+    line="${line//\{ipset_cloudflare1\}/$TEMP_DIR/ipset-all_merged.txt}"
+    line="${line//\{ipset_discord\}/$TEMP_DIR/ipset-all_merged.txt}"
+    line="${line//\{ipset_dns\}/$TEMP_DIR/ipset-all_merged.txt}"
+    line="${line//\{cloudflare_ipset\}/$TEMP_DIR/ipset-all_merged.txt}"
+    line="${line//\{discord\}/$TEMP_DIR/list-general_merged.txt}"
+    line="${line//\{telegram\}/$TEMP_DIR/list-general_merged.txt}"
+    line="${line//\{youtube\}/$TEMP_DIR/list-general_merged.txt}"
+    line="${line//\{rutracker\}/$TEMP_DIR/list-general_merged.txt}"
+    line="${line//\{hosts\}/$TEMP_DIR/list-general_merged.txt}"
+    line="${line//\{netrogat\}/$TEMP_DIR/list-general_merged.txt}"
+    line="${line//\{other2\}/$TEMP_DIR/list-general_merged.txt}"
+    line="${line//\{russia_blacklist\}/$TEMP_DIR/list-general_merged.txt}"
+    line="${line//\{russia_youtube_rtmps\}/$TEMP_DIR/list-general_merged.txt}"
+
     # ЗАМЕНЯЕМ {GameFilter} НА ЗНАЧЕНИЕ В ЗАВИСИМОСТИ ОТ ПРОТОКОЛА
     if [[ "$line" == *"--filter-tcp"* && "$line" == *"{GameFilter}"* ]]; then
         # Для TCP строк используем TCP значение
@@ -237,14 +258,26 @@ done < "$CONFIG_FILE"
 
 echo "Final ARGS: $ARGS"
 
-sysctl net.netfilter.nf_conntrack_tcp_be_liberal=1
+# Сохраняем прежнее значение sysctl, чтобы stopper.sh мог его вернуть.
+SYSCTL_KEY="net.netfilter.nf_conntrack_tcp_be_liberal"
+SYSCTL_STATE_DIR="/run/zapret"
+mkdir -p "$SYSCTL_STATE_DIR"
+if sysctl -n "$SYSCTL_KEY" > /dev/null 2>&1; then
+    # Исходное значение сохраняем один раз: повторные запуски не должны его перезаписывать.
+    if [ ! -f "$SYSCTL_STATE_DIR/be_liberal.before" ]; then
+        sysctl -n "$SYSCTL_KEY" > "$SYSCTL_STATE_DIR/be_liberal.before" 2>/dev/null || true
+    fi
+    sysctl -q "$SYSCTL_KEY=1" || echo "Warning: не удалось применить $SYSCTL_KEY=1"
+else
+    echo "Warning: $SYSCTL_KEY недоступен (модуль nf_conntrack не загружен?)"
+fi
 
 if [ "$FWTYPE" = "iptables" ]; then
-    TCP_PORTS=$(echo "$ARGS" | tr -s ' ' '\n' | grep '^--filter-tcp=' | sed 's/--filter-tcp=//' | paste -sd, | sed 's/-/:/g')
-    UDP_PORTS=$(echo "$ARGS" | tr -s ' ' '\n' | grep '^--filter-udp=' | sed 's/--filter-udp=//' | paste -sd, | sed 's/-/:/g')
+    TCP_PORTS=$(echo "$ARGS" | tr -s ' ' '\n' | grep '^--filter-tcp=' | sed 's/--filter-tcp=//' | paste -sd, | sed 's/-/:/g' || true)
+    UDP_PORTS=$(echo "$ARGS" | tr -s ' ' '\n' | grep '^--filter-udp=' | sed 's/--filter-udp=//' | paste -sd, | sed 's/-/:/g' || true)
 elif [ "$FWTYPE" = "nftables" ]; then
-    TCP_PORTS=$(echo "$ARGS" | tr -s ' ' '\n' | grep '^--filter-tcp=' | sed 's/--filter-tcp=//' | paste -sd, | sed 's/:/-/g')
-    UDP_PORTS=$(echo "$ARGS" | tr -s ' ' '\n' | grep '^--filter-udp=' | sed 's/--filter-udp=//' | paste -sd, | sed 's/:/-/g')
+    TCP_PORTS=$(echo "$ARGS" | tr -s ' ' '\n' | grep '^--filter-tcp=' | sed 's/--filter-tcp=//' | paste -sd, | sed 's/:/-/g' || true)
+    UDP_PORTS=$(echo "$ARGS" | tr -s ' ' '\n' | grep '^--filter-udp=' | sed 's/--filter-udp=//' | paste -sd, | sed 's/:/-/g' || true)
 fi
 
 # Удаляем дубликаты портов
@@ -264,62 +297,52 @@ echo "Configuring $FWTYPE for TCP ports: $TCP_PORTS"
 echo "Configuring $FWTYPE for UDP ports: $UDP_PORTS"
 
 if [ "$FWTYPE" = "iptables" ]; then
-    iptables -t mangle -F PREROUTING
-    iptables -t mangle -F POSTROUTING
-    ip6tables -t mangle -F PREROUTING
-    ip6tables -t mangle -F POSTROUTING
+    # Своя цепочка ZAPRET: не стираем чужие правила Docker/libvirt/VPN/firewalld.
+    for tool in iptables ip6tables; do
+        "$tool" -t mangle -N ZAPRET 2>/dev/null || true
+        "$tool" -t mangle -F ZAPRET
+        "$tool" -t mangle -D PREROUTING -j ZAPRET 2>/dev/null || true
+        "$tool" -t mangle -D POSTROUTING -j ZAPRET 2>/dev/null || true
+        "$tool" -t mangle -I PREROUTING -j ZAPRET
+        "$tool" -t mangle -I POSTROUTING -j ZAPRET
+    done
 elif [ "$FWTYPE" = "nftables" ]; then
-    nft add table inet zapret
-    nft flush table inet zapret
-    nft add chain inet zapret prerouting { type filter hook prerouting priority mangle \; }
-    nft add chain inet zapret postrouting { type filter hook postrouting priority mangle \; }
+    # Повторный запуск не должен падать на существующей таблице/цепочках.
+    nft add table inet zapret 2>/dev/null || true
+    nft flush table inet zapret 2>/dev/null || true
+    nft add chain inet zapret prerouting { type filter hook prerouting priority mangle \; } 2>/dev/null || true
+    nft add chain inet zapret postrouting { type filter hook postrouting priority mangle \; } 2>/dev/null || true
 fi
 
 if [ "$FWTYPE" = "iptables" ]; then
     add_ipt_rule() {
-        local chain=$1
-        local iface_arg=$2
-        local iface_list=$3
-        local proto=$4
-        local ports=$5
-        local qnum=$6
-        local extra_flags=$7
+        local proto=$1
+        local ports=$2
+        local qnum=$3
+        local extra_flags=$4
 
-        if [ -z "$iface_list" ]; then
-             iptables -t mangle -I "$chain" -p "$proto" -m multiport --dports "$ports" \
-                $extra_flags -j NFQUEUE --queue-num "$qnum" --queue-bypass
-             iptables -t mangle -I "$chain" -p "$proto" -m multiport --sports "$ports" \
-                $extra_flags -j NFQUEUE --queue-num "$qnum" --queue-bypass
-             ip6tables -t mangle -I "$chain" -p "$proto" -m multiport --dports "$ports" \
-                $extra_flags -j NFQUEUE --queue-num "$qnum" --queue-bypass
-             ip6tables -t mangle -I "$chain" -p "$proto" -m multiport --sports "$ports" \
-                $extra_flags -j NFQUEUE --queue-num "$qnum" --queue-bypass
-        else
-            for iface in $iface_list; do
-                iptables -t mangle -I "$chain" "$iface_arg" "$iface" -p "$proto" -m multiport --dports "$ports" \
-                    $extra_flags -j NFQUEUE --queue-num "$qnum" --queue-bypass
-                iptables -t mangle -I "$chain" "$iface_arg" "$iface" -p "$proto" -m multiport --sports "$ports" \
-                    $extra_flags -j NFQUEUE --queue-num "$qnum" --queue-bypass
-                ip6tables -t mangle -I "$chain" "$iface_arg" "$iface" -p "$proto" -m multiport --dports "$ports" \
-                    $extra_flags -j NFQUEUE --queue-num "$qnum" --queue-bypass
-                ip6tables -t mangle -I "$chain" "$iface_arg" "$iface" -p "$proto" -m multiport --sports "$ports" \
-                    $extra_flags -j NFQUEUE --queue-num "$qnum" --queue-bypass
-            done
-        fi
+        iptables -t mangle -I ZAPRET -p "$proto" -m multiport --dports "$ports" \
+            $extra_flags -j NFQUEUE --queue-num "$qnum" --queue-bypass
+        iptables -t mangle -I ZAPRET -p "$proto" -m multiport --sports "$ports" \
+            $extra_flags -j NFQUEUE --queue-num "$qnum" --queue-bypass
+        ip6tables -t mangle -I ZAPRET -p "$proto" -m multiport --dports "$ports" \
+            $extra_flags -j NFQUEUE --queue-num "$qnum" --queue-bypass
+        ip6tables -t mangle -I ZAPRET -p "$proto" -m multiport --sports "$ports" \
+            $extra_flags -j NFQUEUE --queue-num "$qnum" --queue-bypass
     }
 
     if [ -n "$TCP_PORTS" ]; then
-        add_ipt_rule "POSTROUTING" "-o" "$IFACE_WAN" "tcp" "$TCP_PORTS" "200" "-m connbytes --connbytes-dir=original --connbytes-mode=packets --connbytes 1:12"
+        add_ipt_rule "tcp" "$TCP_PORTS" "200" "-m connbytes --connbytes-dir=original --connbytes-mode=packets --connbytes 1:12"
     fi
     if [ -n "$UDP_PORTS" ]; then
-        add_ipt_rule "POSTROUTING" "-o" "$IFACE_WAN" "udp" "$UDP_PORTS" "200" "-m connbytes --connbytes-dir=original --connbytes-mode=packets --connbytes 1:12"
+        add_ipt_rule "udp" "$UDP_PORTS" "200" "-m connbytes --connbytes-dir=original --connbytes-mode=packets --connbytes 1:12"
     fi
 
     if [ -n "$TCP_PORTS" ]; then
-        add_ipt_rule "PREROUTING" "-i" "$IFACE_LAN" "tcp" "$TCP_PORTS" "200" "-m connbytes --connbytes-dir=reply --connbytes-mode=packets --connbytes 1:6"
+        add_ipt_rule "tcp" "$TCP_PORTS" "200" "-m connbytes --connbytes-dir=reply --connbytes-mode=packets --connbytes 1:6"
     fi
     if [ -n "$UDP_PORTS" ]; then
-        add_ipt_rule "PREROUTING" "-i" "$IFACE_LAN" "udp" "$UDP_PORTS" "200" "-m connbytes --connbytes-dir=reply --connbytes-mode=packets --connbytes 1:6"
+        add_ipt_rule "udp" "$UDP_PORTS" "200" "-m connbytes --connbytes-dir=reply --connbytes-mode=packets --connbytes 1:6"
     fi
 
 elif [ "$FWTYPE" = "nftables" ]; then
@@ -335,9 +358,23 @@ elif [ "$FWTYPE" = "nftables" ]; then
     fi
 fi
 
+# ПРОВЕРЯЕМ, ЧТО ПРАВИЛА NFQUEUE РЕАЛЬНО СОЗДАНЫ
+if [ "$FWTYPE" = "iptables" ]; then
+    if ! iptables -t mangle -S ZAPRET 2>/dev/null | grep -q -- '-j NFQUEUE'; then
+        echo "ERROR: правила NFQUEUE не созданы (iptables)" >&2
+        exit 1
+    fi
+elif [ "$FWTYPE" = "nftables" ]; then
+    # nft печатает правило как «queue flags bypass to 200», а не «queue num 200».
+    if ! nft list chain inet zapret prerouting 2>/dev/null | grep -qE 'queue.*to 200'; then
+        echo "ERROR: правила NFQUEUE не созданы (nftables)" >&2
+        exit 1
+    fi
+fi
+
 # ЗАПУСКАЕМ NFQWS С ВРЕМЕННЫМИ ФАЙЛАМИ
 echo "Starting nfqws with temp files..."
-if [ "$1" = "--foreground" ]; then
+if [ "${1:-}" = "--foreground" ]; then
     /opt/zapret/nfqws --qnum=200 --uid=0:0 $ARGS
 else
     /opt/zapret/nfqws --qnum=200 --uid=0:0 $ARGS &
