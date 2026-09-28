@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import tkinter as tk
 
+from core.dpi_utils import safe_grab_set
+
 def show_info(parent, title, message):
     """Показывает информационное сообщение в стиле приложения"""
     return _show_dialog(parent, title, message, "info")
@@ -49,7 +51,7 @@ def _show_dialog(parent, title, message, dialog_type):
 
     # Центрируем окно
     dialog.transient(parent)
-    dialog.grab_set()
+    safe_grab_set(dialog)
 
     # Определяем цвета в зависимости от типа
     if dialog_type == "error":
@@ -134,7 +136,7 @@ def _show_question(parent, title, message):
 
     # Центрируем окно
     dialog.transient(parent)
-    dialog.grab_set()
+    safe_grab_set(dialog)
 
     # Основной фрейм
     main_frame = tk.Frame(dialog, bg='#182030', padx=30, pady=25)
@@ -235,7 +237,7 @@ def _show_question_cancel(parent, title, message):
 
     # Центрируем окно
     dialog.transient(parent)
-    dialog.grab_set()
+    safe_grab_set(dialog)
 
     # Основной фрейм
     main_frame = tk.Frame(dialog, bg='#182030', padx=30, pady=25)

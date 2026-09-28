@@ -11,6 +11,7 @@ from core.dpi_utils import (
     _place_child_centered_on_anchor,
     application_tk_root,
     center_toplevel_on_screen,
+    safe_grab_set,
     set_window_size_to_fit_content,
 )
 from core.game_filter_settings import normalize_game_filter_protocol_mode
@@ -307,7 +308,7 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
 
     # ОБЯЗАТЕЛЬНО для SteamOS/Wayland
     warning_window.transient(host.root)  # Делаем окно дочерним
-    warning_window.grab_set()  # Делаем модальным
+    safe_grab_set(warning_window)  # Делаем модальным
 
     warning_window.update_idletasks()
     warning_window.update()

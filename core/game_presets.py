@@ -13,6 +13,7 @@
    ipset-all_user.txt из utils/for games/, см. gamefilter_window).
 """
 
+import json
 import os
 
 GAMEFILTER_PLACEHOLDER_TCP = "--filter-tcp={GameFilter}"
@@ -20,6 +21,39 @@ GAMEFILTER_PLACEHOLDER_UDP = "--filter-udp={GameFilter}"
 
 # Префикс файла-маркера в utils: наличие utils/game_preset_{preset_id} = пресет применён
 PRESET_FILE_PREFIX = "game_preset_"
+
+# Состояние подстановки: индексы строк config.txt, где {GameFilter} заменён портами.
+# Нужно, чтобы при снятии пресета вернуть плейсхолдеры только в своих строках.
+SUBSTITUTED_STATE_NAME = "gamefilter_substituted.json"
+
+
+def _substituted_state_path(manager_dir: str) -> str:
+    return os.path.join(manager_dir, "utils", SUBSTITUTED_STATE_NAME)
+
+
+def _save_substituted_indexes(manager_dir: str, indexes: list[int]) -> None:
+    try:
+        os.makedirs(os.path.dirname(_substituted_state_path(manager_dir)), exist_ok=True)
+        with open(_substituted_state_path(manager_dir), "w", encoding="utf-8") as f:
+            json.dump(sorted(set(indexes)), f)
+    except OSError as e:
+        print(f"Не удалось сохранить состояние подстановки GameFilter: {e}")
+
+
+def _load_substituted_indexes(manager_dir: str) -> list[int]:
+    try:
+        with open(_substituted_state_path(manager_dir), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return [int(i) for i in data if isinstance(i, (int, float))]
+    except (OSError, ValueError):
+        return []
+
+
+def _clear_substituted_state(manager_dir: str) -> None:
+    try:
+        os.remove(_substituted_state_path(manager_dir))
+    except OSError:
+        pass
 
 # Ключ — идентификатор пресета
 GAME_PRESETS = {
@@ -45,7 +79,6 @@ GAME_PRESETS = {
     },
     "roblox": {
         "name": "Roblox",
-        "game_filter_tcp": "{GameFilter}",
         "game_filter_udp": "49152-65535",
     },
     "fall_guys": {
@@ -56,7 +89,6 @@ GAME_PRESETS = {
         "lines": [
             "--filter-tcp=443 --hostlist-domains=api.orerve.net,orerve.net,frontier.co.uk,frontierstore.net,auth.frontierstore.net,elitedangerous.com --dpi-desync=hostfakesplit --dpi-desync-hostfakesplit-mod=host=amd.com --dpi-desync-fooling=ts --new",
         ],
-        "game_filter_tcp": "{GameFilter}",
         "game_filter_udp": "4380,5100,19364,27000-27031,27036",
     },
 }
@@ -126,7 +158,11 @@ def _config_txt_path(manager_dir):
 
 
 def substitute_gamefilter_in_config(tcp_ports, udp_ports, manager_dir=None):
-    """В config.txt подставляет порты вместо --filter-tcp={GameFilter} и --filter-udp={GameFilter}."""
+    """В config.txt подставляет порты вместо --filter-tcp={GameFilter} и --filter-udp={GameFilter}.
+
+    Запоминает индексы изменённых строк, чтобы снятие пресета вернуло плейсхолдеры
+    только в них (чужие строки с такими же портами не портятся).
+    """
     if manager_dir is None:
         manager_dir = get_manager_dir()
     path = _config_txt_path(manager_dir)
@@ -134,15 +170,24 @@ def substitute_gamefilter_in_config(tcp_ports, udp_ports, manager_dir=None):
         return
     with open(path, "r", encoding="utf-8") as f:
         content = f.read()
-    new_content = content.replace(GAMEFILTER_PLACEHOLDER_TCP, f"--filter-tcp={tcp_ports}")
-    new_content = new_content.replace(GAMEFILTER_PLACEHOLDER_UDP, f"--filter-udp={udp_ports}")
-    if new_content != content:
+
+    lines = content.splitlines(keepends=True)
+    changed_indexes = []
+    for index, line in enumerate(lines):
+        new_line = line.replace(GAMEFILTER_PLACEHOLDER_TCP, f"--filter-tcp={tcp_ports}")
+        new_line = new_line.replace(GAMEFILTER_PLACEHOLDER_UDP, f"--filter-udp={udp_ports}")
+        if new_line != line:
+            lines[index] = new_line
+            changed_indexes.append(index)
+
+    if changed_indexes:
         with open(path, "w", encoding="utf-8") as f:
-            f.write(new_content)
+            f.writelines(lines)
+        _save_substituted_indexes(manager_dir, changed_indexes)
 
 
 def restore_gamefilter_in_config(tcp_ports, udp_ports, manager_dir=None):
-    """Возвращает в config.txt плейсхолдеры {GameFilter} для заданных портов пресета."""
+    """Возвращает в config.txt плейсхолдеры {GameFilter} только в строках подстановки."""
     if manager_dir is None:
         manager_dir = get_manager_dir()
     path = _config_txt_path(manager_dir)
@@ -150,11 +195,28 @@ def restore_gamefilter_in_config(tcp_ports, udp_ports, manager_dir=None):
         return
     with open(path, "r", encoding="utf-8") as f:
         content = f.read()
-    new_content = content.replace(f"--filter-tcp={tcp_ports}", GAMEFILTER_PLACEHOLDER_TCP)
-    new_content = new_content.replace(f"--filter-udp={udp_ports}", GAMEFILTER_PLACEHOLDER_UDP)
-    if new_content != content:
+
+    lines = content.splitlines(keepends=True)
+    saved_indexes = _load_substituted_indexes(manager_dir)
+    targets = [i for i in saved_indexes if 0 <= i < len(lines)]
+    if not targets:
+        # Файла состояния нет (например, подстановка была до обновления) —
+        # работаем по всем строкам, как раньше.
+        targets = list(range(len(lines)))
+
+    changed = False
+    for index in targets:
+        line = lines[index]
+        new_line = line.replace(f"--filter-tcp={tcp_ports}", GAMEFILTER_PLACEHOLDER_TCP)
+        new_line = new_line.replace(f"--filter-udp={udp_ports}", GAMEFILTER_PLACEHOLDER_UDP)
+        if new_line != line:
+            lines[index] = new_line
+            changed = True
+
+    if changed:
         with open(path, "w", encoding="utf-8") as f:
-            f.write(new_content)
+            f.writelines(lines)
+    _clear_substituted_state(manager_dir)
 
 
 def restore_gamefilter_for_preset(preset_id, manager_dir=None):

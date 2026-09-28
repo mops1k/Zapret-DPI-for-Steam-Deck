@@ -26,7 +26,7 @@ class MainUpdatesMixin:
 
             try:
                 bundle_updater = ZapretBundleUpdater()
-                latest_b, bundle_info = bundle_updater.check_for_updates()
+                latest_b, bundle_info, check_error = bundle_updater.check_for_updates_detailed()
                 if latest_b and bundle_info:
                     update_tasks.append({
                         'name': 'Zapret DPI Manager',
@@ -34,8 +34,20 @@ class MainUpdatesMixin:
                         'download_url': bundle_info.get('download_url'),
                     })
                     print("🔄 Доступно обновление")
+                elif check_error:
+                    message = f"Не удалось проверить обновления: {check_error}"
+                    print(f"⚠️ {message}")
+                    self.root.after(0, lambda m=message: self.show_status_message(m, error=True))
+                    return
             except Exception as e:
                 print(f"⚠️ Проверка обновления: {e}")
+                self.root.after(
+                    0,
+                    lambda m=str(e): self.show_status_message(
+                        f"Не удалось проверить обновления: {m}", error=True
+                    ),
+                )
+                return
 
             if not update_tasks:
                 self.root.after(0, lambda: self.show_status_message("Нет доступных обновлений", warning=True))
@@ -49,4 +61,7 @@ class MainUpdatesMixin:
             print(f"❌ Ошибка при подготовке обновления: {e}")
             import traceback
             traceback.print_exc()
-            self.root.after(0, lambda: self.show_status_message(f"Ошибка обновления: {e}", error=True))
+            self.root.after(
+                0,
+                lambda m=str(e): self.show_status_message(f"Ошибка обновления: {m}", error=True),
+            )

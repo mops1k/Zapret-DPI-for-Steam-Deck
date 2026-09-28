@@ -5,7 +5,7 @@ import subprocess
 from ui.components.custom_messagebox import show_info, show_error
 from core.service_data import SERVICE_CATEGORIES, PROXY_DOMAINS
 from ui.components.button_styler import create_hover_button
-from ui.windows.sudo_password_window import SudoPasswordWindow
+from core.sudo_helper import run_sudo
 from core.dpi_utils import (
     geometry_resize_keep_position,
     place_toplevel_centered_on_parent,
@@ -74,6 +74,7 @@ class ServiceUnlockWindow:
                 "Rutor": SERVICE_CATEGORIES["rutor"],
             },
             "Discord": SERVICE_CATEGORIES["discord"],
+            "Notion": SERVICE_CATEGORIES["notion"],
             "Другое": SERVICE_CATEGORIES["other"]
         }
         return main_categories
@@ -374,95 +375,87 @@ class ServiceUnlockWindow:
                                     selected_entries.append(f"{ip} {domain}")
                                     selected_domains.add(domain)
 
-            # Всегда показываем окно ввода пароля
-            def on_password_valid(password):
-                self.save_hosts_with_password(password, selected_entries, selected_domains)
-
-            password_window = SudoPasswordWindow(self.window, on_password_valid=on_password_valid)
-            password_window.run()
+            # Пароль вводит системный askpass в момент записи (sudo -A)
+            self.save_hosts(selected_entries, selected_domains)
 
         except Exception as e:
             show_error(self.window, "Ошибка", f"Не удалось сохранить файл hosts: {e}")
 
-    def save_hosts_with_password(self, password, selected_entries, selected_domains):
-        """Сохраняет файл hosts с использованием введенного пароля"""
+    def _unbind_wheel(self):
+        """Снимает глобальные привязки колеса мыши."""
         try:
-            import subprocess
+            if self.window is not None:
+                self.window.unbind_all("<MouseWheel>")
+                self.window.unbind_all("<Button-4>")
+                self.window.unbind_all("<Button-5>")
+        except tk.TclError:
+            pass
+
+    def save_hosts(self, selected_entries, selected_domains):
+        """Сохраняет /etc/hosts: бэкап, безопасная замена раздела, атомарная запись."""
+        try:
             import tempfile
+            import time as _time
 
             # 1. Читаем текущий /etc/hosts
-            read_process = subprocess.Popen(
-                ['sudo', '-S', 'cat', self.hosts_file],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            stdout, stderr = read_process.communicate(input=password + '\n')
+            code, stdout, stderr = run_sudo(['cat', self.hosts_file], timeout=30)
 
-            if read_process.returncode != 0:
+            if code != 0:
                 show_error(self.window, "Ошибка", f"Не удалось прочитать файл hosts:\n{stderr}")
                 return
 
             existing_lines = stdout.splitlines(keepends=True) if stdout else []
 
-            # 2. Обрабатываем содержимое - УДАЛЯЕМ ВСЕ наши старые записи
+            # 2. Обрабатываем содержимое — удаляем ТОЛЬКО наши записи
             new_lines = []
-            service_domains = set(self.all_domains.keys())  # Используем self.all_domains
+            service_domains = set(self.all_domains.keys())
 
-            # Флаг, чтобы знать, был ли наш раздел в файле
             our_section_exists = False
             section_start_index = -1
 
             for line in existing_lines:
-                # Проверяем, не начинается ли строка с комментария нашего раздела
                 line_stripped = line.strip()
 
                 if "Разблокировка сервисов (добавлено Zapret_DPI_Manager)" in line:
                     our_section_exists = True
                     section_start_index = len(new_lines)
-                    # Оставляем заголовок раздела, но будем заменять содержимое
                     new_lines.append("# Разблокировка сервисов (добавлено Zapret_DPI_Manager)\n")
                     continue
 
                 # Если это наша запись (домен из наших сервисов), пропускаем ее
                 if line_stripped and not line_stripped.startswith('#'):
                     parts = line_stripped.split()
-                    if len(parts) >= 2:
-                        domain = parts[1]
-                        if domain in service_domains:  # Используем service_domains из self.all_domains
-                            continue  # Пропускаем эту строку
+                    if len(parts) >= 2 and parts[1] in service_domains:
+                        continue
 
-                # Сохраняем все остальные строки
                 new_lines.append(line)
 
             # 3. Если у нас есть выбранные записи, добавляем их
             if selected_entries:
                 if not our_section_exists:
-                    # Добавляем новый раздел в конец
                     new_lines.append("\n# Разблокировка сервисов (добавлено Zapret_DPI_Manager)\n")
                     for entry in sorted(selected_entries):
                         new_lines.append(f"{entry}\n")
                 else:
-                    # Заменяем содержимое существующего раздела
-                    # Находим где заканчивается наш раздел (первые не-комментарии после заголовка)
+                    # Заменяем только наши строки: до первой пустой строки или комментария.
                     after_section_index = section_start_index + 1
-                    while (after_section_index < len(new_lines) and
-                        new_lines[after_section_index].strip() and
-                        not new_lines[after_section_index].startswith('#')):
-                        # Удаляем старые записи из раздела
-                        new_lines.pop(after_section_index)
+                    while after_section_index < len(new_lines):
+                        candidate = new_lines[after_section_index].strip()
+                        if not candidate or candidate.startswith('#'):
+                            break
+                        parts = candidate.split()
+                        if len(parts) >= 2 and parts[1] in service_domains:
+                            new_lines.pop(after_section_index)
+                            continue
+                        break
 
-                    # Вставляем новые записи
                     for entry in sorted(selected_entries):
                         new_lines.insert(after_section_index, f"{entry}\n")
                         after_section_index += 1
             else:
                 # Если ничего не выбрано, удаляем весь наш раздел
                 if our_section_exists:
-                    # Удаляем заголовок раздела
                     new_lines.pop(section_start_index)
-                    # Удаляем пустые строки после раздела, если есть
                     if section_start_index < len(new_lines) and not new_lines[section_start_index].strip():
                         new_lines.pop(section_start_index)
 
@@ -471,18 +464,31 @@ class ServiceUnlockWindow:
                 temp_file.writelines(new_lines)
                 temp_path = temp_file.name
 
-            try:
-                # 5. Записываем обратно в /etc/hosts
-                write_process = subprocess.Popen(
-                    ['sudo', '-S', 'cp', temp_path, self.hosts_file],
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True
-                )
-                stdout, stderr = write_process.communicate(input=password + '\n')
+            new_hosts = f"{self.hosts_file}.zapret.new"
+            backup = f"{self.hosts_file}.bak.{_time.strftime('%Y%m%d_%H%M%S')}"
 
-                if write_process.returncode == 0:
+            try:
+                # 5. Бэкап, подготовка нового файла в той же ФС и атомарная замена
+                code, _out, err = run_sudo(['cp', '-a', self.hosts_file, backup], timeout=30)
+                if code != 0:
+                    show_error(
+                        self.window, "Ошибка",
+                        f"Не удалось создать резервную копию hosts:\n{err}",
+                    )
+                    return
+
+                code, _out, err = run_sudo(['cp', temp_path, new_hosts], timeout=30)
+                if code != 0:
+                    show_error(
+                        self.window, "Ошибка",
+                        f"Не удалось подготовить новый файл hosts:\n{err}",
+                    )
+                    return
+
+                run_sudo(['chmod', '644', new_hosts], timeout=30)
+                code, _out, err = run_sudo(['mv', new_hosts, self.hosts_file], timeout=30)
+
+                if code == 0:
                     # Обновляем кеш существующих записей
                     self.existing_entries = selected_domains
 
@@ -492,7 +498,7 @@ class ServiceUnlockWindow:
                     if total_selected > 0:
                         # Подсчитываем количество выбранных категорий
                         categories_selected = 0
-                        for category_name, category_info in self.service_vars.items():
+                        for _category_name, category_info in self.service_vars.items():
                             if category_info['var'].get():
                                 categories_selected += 1
 
@@ -512,7 +518,8 @@ class ServiceUnlockWindow:
                     # Обновляем системный DNS кеш
                     self.update_dns_cache()
                 else:
-                    show_error(self.window, "Ошибка", f"Не удалось записать файл hosts:\n{stderr}")
+                    show_error(self.window, "Ошибка", f"Не удалось записать файл hosts:\n{err}")
+                    run_sudo(['rm', '-f', new_hosts], timeout=30)
 
             finally:
                 # Удаляем временный файл
@@ -529,9 +536,8 @@ class ServiceUnlockWindow:
         try:
             # Для Linux систем (systemd-resolved)
             if os.path.exists('/run/systemd/system'):
-                result = subprocess.run(['systemd-resolve', '--flush-caches'],
-                                     capture_output=True, text=True)
-                if result.returncode == 0:
+                code, _out, _err = run_sudo(['resolvectl', 'flush-caches'], timeout=30)
+                if code == 0:
                     show_info(
                         self.window,
                         "Информация",
@@ -693,6 +699,10 @@ class ServiceUnlockWindow:
         scrollable_frame.bind("<MouseWheel>", on_mouse_wheel)
         scrollable_frame.bind("<Button-4>", on_mouse_wheel)
         scrollable_frame.bind("<Button-5>", on_mouse_wheel)
+
+        # Снимаем глобальные привязки при закрытии окна, иначе скролл
+        # в других окнах ломается (TclError после уничтожения виджета).
+        self.window.bind("<Destroy>", lambda _e: self._unbind_wheel(), add="+")
 
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 

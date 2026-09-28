@@ -97,6 +97,26 @@ def application_tk_root(widget):
     return w
 
 
+def safe_grab_set(window) -> None:
+    """Делает окно модальным после маппинга, не падая на «window not viewable».
+
+    Tk поднимает TclError, если grab_set вызван до появления окна на экране,
+    поэтому сначала ждём видимость (с ограничением) и глотаем TclError.
+    """
+    try:
+        window.update_idletasks()
+    except tk.TclError:
+        return
+    try:
+        window.wait_visibility()
+    except tk.TclError:
+        pass
+    try:
+        window.grab_set()
+    except tk.TclError:
+        pass
+
+
 def _parse_winfo_geometry(geom):
     """Парсит winfo_geometry(): 'WxH+X+Y' (X,Y со знаком)."""
     m = re.match(r"^(\d+)x(\d+)([+-]\d+)([+-]\d+)$", (geom or "").strip())

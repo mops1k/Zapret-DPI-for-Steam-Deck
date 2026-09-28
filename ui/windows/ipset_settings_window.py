@@ -5,6 +5,7 @@ from tkinter import messagebox
 import ipaddress
 import re
 import os
+import shutil
 from ui.components.custom_messagebox import show_info, show_error, ask_yesno, ask_yesnocancel
 from core.dpi_utils import application_tk_root, place_toplevel_centered_on_parent
 from core.tk_scale_lab_helpers import logical_ui_scale, warning_dialog_scale
@@ -621,6 +622,15 @@ class IpsetFilterWindow:
             # Создаем директорию, если она не существует
             os.makedirs(os.path.dirname(self.ipset_all_file), exist_ok=True)
 
+            # Бэкап текущего файла перед изменением (для отката)
+            if os.path.exists(self.ipset_all_file):
+                import time as _time
+                backup = f"{self.ipset_all_file}.bak.{_time.strftime('%Y%m%d_%H%M%S')}"
+                try:
+                    shutil.copy2(self.ipset_all_file, backup)
+                except OSError as e:
+                    print(f"Не удалось создать бэкап ipset: {e}")
+
             if mode == "any":
                 # Файл должен быть пустым
                 with open(self.ipset_all_file, 'w', encoding='utf-8') as f:
@@ -647,6 +657,12 @@ class IpsetFilterWindow:
                     f.write("203.0.113.113/32")
                 message = "Режим 'none' применен"
 
+            # Применяем к работающей службе: без перезапуска файл не перечитывается
+            if self._restart_zapret():
+                message += " Служба перезапущена."
+            else:
+                message += " Перезапустите службу, чтобы применить."
+
             # Показываем сообщение об успехе
             self.show_status_message(message, success=True)
 
@@ -654,6 +670,15 @@ class IpsetFilterWindow:
             error_msg = f"Ошибка применения режима: {e}"
             print(f"❌ {error_msg}")
             self.show_status_message(error_msg, error=True)
+
+    def _restart_zapret(self) -> bool:
+        """Перезапускает службу zapret, чтобы новый ipset-файл применился."""
+        from core.sudo_helper import run_sudo, sudo_available
+
+        if not sudo_available():
+            return False
+        code, _out, _err = run_sudo(['systemctl', 'restart', 'zapret'], timeout=90)
+        return code == 0
 
     def create_window(self):
         """Создает окно настройки IPSet Filter"""
@@ -865,7 +890,14 @@ class IpsetFilterWindow:
 
         # Автоматически очищаем сообщение через 3 секунды (кроме ошибок)
         if message and not error:
-            self.window.after(3000, lambda: self.status_message.config(text=""))
+            def _clear_status():
+                try:
+                    if self.window.winfo_exists():
+                        self.status_message.config(text="")
+                except tk.TclError:
+                    pass
+
+            self.window.after(3000, _clear_status)
 
     def run(self):
         """Запускает окно настройки IPSet Filter"""

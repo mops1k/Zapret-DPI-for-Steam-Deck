@@ -411,6 +411,7 @@ class HostlistSettingsWindow:
         """Сохраняет пользовательские домены в указанный файл"""
         try:
             custom_domains = text_widget.get("1.0", tk.END).strip()
+            cleaned_lines = []
 
             # Проверяем пользовательские домены перед сохранением
             if custom_domains:
@@ -418,7 +419,6 @@ class HostlistSettingsWindow:
                 error_lines = []
 
                 # Очищаем каждую строку перед проверкой
-                cleaned_lines = []
                 for line in lines:
                     if line.strip() and not line.strip().startswith('#'):
                         cleaned_line = self.clean_domain(line)
@@ -458,17 +458,16 @@ class HostlistSettingsWindow:
             # Создаем директорию, если она не существует
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
+            # В файл пишем ОЧИЩЕННЫЕ строки, а не исходный текст из виджета.
             with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(custom_domains)
+                f.write('\n'.join(cleaned_lines))
 
             # Считаем пользовательские домены (без комментариев)
             custom_count = 0
-            if custom_domains:
-                custom_lines = custom_domains.split('\n')
-                for line in custom_lines:
-                    line = line.strip()
-                    if line and not line.startswith('#'):
-                        custom_count += 1
+            for line in cleaned_lines:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    custom_count += 1
 
             return custom_count
 
@@ -497,11 +496,13 @@ class HostlistSettingsWindow:
             if unblocked_count is None:  # Если была ошибка
                 return
 
-            # Обрабатываем list-general.txt: сохраняем существующие данные + добавляем/удаляем выбранные сервисы
-            # Загружаем текущие домены из файла (если он существует)
+            # Сервисы пишем в ПОЛЬЗОВАТЕЛЬСКИЙ файл (list-general_user.txt):
+            # базовый list-general.txt перезаписывается при обновлении, поэтому
+            # выбор сервисов в нём не сохранялся.
+            user_file = self.list_general_user_file_file
             current_domains = set()
-            if os.path.exists(self.list_general_file):
-                with open(self.list_general_file, 'r', encoding='utf-8') as f:
+            if os.path.exists(user_file):
+                with open(user_file, 'r', encoding='utf-8') as f:
                     current_domains = set([line.strip() for line in f if line.strip()])
             else:
                 # Если файла нет, используем существующие домены из загрузки
@@ -523,10 +524,10 @@ class HostlistSettingsWindow:
             if self.github_var.get():
                 current_domains.update(self.services["Github"])
 
-            # Сортируем и сохраняем в файл list-general.txt
+            # Сортируем и сохраняем в пользовательский файл
             sorted_domains = sorted(current_domains)
-            os.makedirs(os.path.dirname(self.list_general_file), exist_ok=True)
-            with open(self.list_general_file, 'w', encoding='utf-8') as f:
+            os.makedirs(os.path.dirname(user_file), exist_ok=True)
+            with open(user_file, 'w', encoding='utf-8') as f:
                 for domain in sorted_domains:
                     f.write(f"{domain}\n")
 

@@ -20,6 +20,7 @@ class ConnectionCheckWindow:
         self.window = None
         self.checking = False
         self.results = []
+        self.log_lines = []  # (сообщение, цвет) — для анализа без чтения Text из потока
         self.zapret_status = None
 
     def run(self):
@@ -149,25 +150,39 @@ class ConnectionCheckWindow:
         self.log_message(f"Время начала: {time.strftime('%H:%M:%S')}")
         self.log_message("")
 
+    def _safe_after(self, func, *args):
+        """Планирует вызов в главном потоке, не падая на уничтоженном окне."""
+        try:
+            if self.window is not None and self.window.winfo_exists():
+                self.window.after(0, func, *args)
+        except (tk.TclError, RuntimeError):
+            pass
+
     def log_message(self, message, color='white'):
         """Добавляет сообщение в область вывода (безопасно для потоков)"""
-        # Используем after для безопасного обновления GUI из другого потока
-        self.window.after(0, self._log_message_thread_safe, message, color)
+        # Копим текст для анализа: читать tk.Text из фонового потока нельзя.
+        self.log_lines.append((message, color))
+        self._safe_after(self._log_message_thread_safe, message, color)
 
     def _log_message_thread_safe(self, message, color):
         """Безопасное добавление сообщения в главном потоке"""
-        self.results_text.config(state='normal')
-        self.results_text.insert(tk.END, f"{message}\n")
+        try:
+            if not self.window.winfo_exists():
+                return
+            self.results_text.config(state='normal')
+            self.results_text.insert(tk.END, f"{message}\n")
 
-        # Применяем цвет через теги
-        if color != 'white':
-            start_index = self.results_text.index(f"end-{len(message)+2}c")  # +2 для символов \n
-            end_index = self.results_text.index("end-1c")
-            self.results_text.tag_add(color, start_index, end_index)
-            self.results_text.tag_config(color, foreground=color)
+            # Применяем цвет через теги
+            if color != 'white':
+                start_index = self.results_text.index(f"end-{len(message)+2}c")  # +2 для символов \n
+                end_index = self.results_text.index("end-1c")
+                self.results_text.tag_add(color, start_index, end_index)
+                self.results_text.tag_config(color, foreground=color)
 
-        self.results_text.see(tk.END)
-        self.results_text.config(state='disabled')
+            self.results_text.see(tk.END)
+            self.results_text.config(state='disabled')
+        except tk.TclError:
+            pass
 
     def stop_check(self):
         """Останавливает проверку"""
@@ -175,7 +190,7 @@ class ConnectionCheckWindow:
             self.checking = False
             self.log_message("\n[!] Проверка остановлена пользователем", "#ff9500")
             # Обновляем кнопку немедленно
-            self.window.after(0, self._update_button_to_start)
+            self._safe_after(self._update_button_to_start)
 
     def _update_button_to_start(self):
         """Обновляет кнопку в состояние 'Запустить'"""
@@ -224,7 +239,7 @@ class ConnectionCheckWindow:
             self.log_message(f"\n[ОШИБКА] {str(e)}", "#ff3b30")
         finally:
             self.checking = False
-            self.window.after(0, self.on_check_complete)
+            self._safe_after(self.on_check_complete)
 
     def check_zapret_status(self):
         """Проверяет статус службы Zapret"""
@@ -371,10 +386,9 @@ class ConnectionCheckWindow:
             try:
                 start_time = time.time()
 
-                # Создаем SSL контекст для HTTPS
+                # Создаем SSL контекст для HTTPS: проверку сертификата не отключаем,
+                # иначе подмена сертификата DPI-системой выглядит как успех.
                 context = ssl.create_default_context()
-                context.check_hostname = False
-                context.verify_mode = ssl.CERT_NONE
 
                 # Устанавливаем соединение
                 conn = http.client.HTTPSConnection(test["url"], timeout=5, context=context)
@@ -419,7 +433,7 @@ class ConnectionCheckWindow:
             total_tests = len(discord_results)
 
             self.log_message("=" * 40, "#0a84ff")
-            self.log_message("🔍 АНАЛИЗ РЕЗУЛЬТАТОВ YOUTUBE:", "#0a84ff")
+            self.log_message("🔍 АНАЛИЗ РЕЗУЛЬТАТОВ DISCORD:", "#0a84ff")
             self.log_message("=" * 40, "#0a84ff")
 
             if successful_tests == total_tests:  # Все тесты успешны
@@ -513,11 +527,14 @@ class ConnectionCheckWindow:
 
                             # Логика проверки для разных тестов
                             if test["name"] == "YouTube API":
-                                if status_str in ['400', '403', '404']:
+                                if status_str in ['400', '403']:
                                     self.log_message(f"    ✅ HTTP {status_code} ({response_time:.0f} мс) - ожидаемая ошибка ключа", "#30d158")
                                     self.results.append(("YouTube", test['name'], True))
                                 elif status_str == '429':
                                     self.log_message(f"    🚫 HTTP {status_code} - лимит запросов", "#ff3b30")
+                                    self.results.append(("YouTube", test['name'], False))
+                                elif status_str == '404':
+                                    self.log_message(f"    ⚠️ HTTP {status_code} - endpoint не найден", "#ff9500")
                                     self.results.append(("YouTube", test['name'], False))
                                 elif status_str == '200':
                                     self.log_message(f"    ⚠️ HTTP {status_code} - неожиданно для тестового ключа", "#ff9500")
@@ -588,8 +605,8 @@ class ConnectionCheckWindow:
         """Проверяет наличие SSL handshake проблем в результатах"""
         ssl_errors = []
 
-        # Собираем все сообщения об ошибках из results_text
-        text_content = self.results_text.get("1.0", tk.END)
+        # Анализируем накопленные сообщения: читать tk.Text из фонового потока нельзя.
+        text_content = "\n".join(message for message, _color in self.log_lines)
 
         # Ищем SSL ошибки
         ssl_keywords = [

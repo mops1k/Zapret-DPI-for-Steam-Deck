@@ -6,7 +6,7 @@ import tkinter as tk
 from ui.components.button_styler import create_hover_button
 from ui.windows.main.protocols import MainWindowActions
 from ui.components.custom_messagebox import show_info, show_error
-from core.dpi_utils import place_toplevel_centered_on_parent
+from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set
 from core.game_filter_settings import (
     GAMEFILTER_PROTOCOL_BOTH,
     GAMEFILTER_PROTOCOL_TCP,
@@ -220,7 +220,7 @@ class GameFilterProtocolModeWindow:
         self.root.update_idletasks()
         self.root.update()
         try:
-            self.root.grab_set()
+            safe_grab_set(self.root)
         except tk.TclError:
             pass
         self._parent.wait_window(self.root)
@@ -351,16 +351,24 @@ class GameFilterWindow:
 
     def _after_protocol_chosen_for_apply(self, mode: str) -> None:
         if not self.main_window.ensure_sudo_password():
+            if hasattr(self.main_window, "show_status_message"):
+                self.main_window.show_status_message("Требуется пароль sudo", warning=True)
             return
         write_game_filter_protocol_mode(mode, get_manager_dir())
+        if hasattr(self.main_window, "update_game_filter_indicator"):
+            self.main_window.update_game_filter_indicator()
         self.close_window()
         self.main_window.restart_zapret_after_preset("Режим протокола Game Filter обновлён")
 
     def disable_game_filter(self):
         """Выключение GameFilter: sudo, переключение, перезапуск службы."""
-        self.close_window()
+        # Сначала проверяем sudo, и только потом закрываем окно — иначе при отказе
+        # пользователь остаётся без окна и без пояснения.
         if not self.main_window.ensure_sudo_password():
+            if hasattr(self.main_window, "show_status_message"):
+                self.main_window.show_status_message("Требуется пароль sudo", warning=True)
             return
+        self.close_window()
         self.main_window._perform_game_filter_toggle()
 
     def open_game_preset_window(self):
@@ -378,7 +386,7 @@ class GameFilterWindow:
         self.root.update_idletasks()
         self.root.update()
         try:
-            self.root.grab_set()
+            safe_grab_set(self.root)
         except tk.TclError:
             pass
         self.root.wait_window()
@@ -586,8 +594,10 @@ class GamePresetWindow:
             f.write(content)
 
     def apply_preset(self):
-        """Применяет выбранный пресет: файл-маркер в utils и запись в config.txt."""
+        """Применяет выбранный пресет: запись в config.txt и файл-маркер в utils."""
         if not self.main_window.ensure_sudo_password():
+            if hasattr(self.main_window, "show_status_message"):
+                self.main_window.show_status_message("Требуется пароль sudo", warning=True)
             return
 
         selected = [pid for pid, var in self.preset_vars.items() if var.get()]
@@ -639,13 +649,14 @@ class GamePresetWindow:
                 self._set_ipset_none()
             restore_gamefilter_for_preset(active_before, self.manager_dir)
 
-        set_active_preset(preset_id, self.manager_dir)
-
         if tcp is not None and udp is not None:
             substitute_gamefilter_in_config(tcp, udp, self.manager_dir)
 
         config_path = self.get_config_path()
         try:
+            # Повторное применение того же пресета не должно дублировать строки.
+            remove_preset_lines_from_config(preset_id, self.manager_dir)
+
             if preset_id == "roblox":
                 self._apply_roblox_domains()
                 self._apply_roblox_ipset()
@@ -662,6 +673,11 @@ class GamePresetWindow:
                 new_content = "\n".join(lines) + "\n" + existing
                 with open(config_path, "w", encoding="utf-8") as f:
                     f.write(new_content)
+
+            # Маркер активного пресета ставим только после успешной записи файлов:
+            # иначе при исключении маркер есть, а конфига нет.
+            set_active_preset(preset_id, self.manager_dir)
+
             if hasattr(self.main_window, "show_status_message"):
                 self.main_window.show_status_message(f"Был выбран пресет для {name}", success=True)
             if hasattr(self.main_window, "update_game_filter_indicator"):
@@ -688,7 +704,7 @@ class GamePresetWindow:
         self.root.update_idletasks()
         self.root.update()
         try:
-            self.root.grab_set()
+            safe_grab_set(self.root)
         except tk.TclError:
             pass
         self.root.wait_window()

@@ -4,7 +4,7 @@ import subprocess
 import re
 from ui.components.custom_messagebox import show_info, show_error, ask_yesno
 from ui.components.button_styler import create_hover_button
-from ui.windows.sudo_password_window import SudoPasswordWindow
+from core.sudo_helper import run_sudo
 from core.dpi_utils import place_toplevel_centered_on_parent
 
 class DNSSettingsWindow:
@@ -35,34 +35,48 @@ class DNSSettingsWindow:
         self.custom_primary_var = tk.StringVar()
         self.custom_secondary_var = tk.StringVar()
 
-        # Текущее активное подключение
+        # Текущее активное подключение и его устройство
         self.active_connection = None
+        self.active_device = None
+        self._prev_dns = None
 
     def create_hover_button(self, parent, text, command, **kwargs):
         """Создает кнопку в стиле главного меню с эффектом наведения"""
         return create_hover_button(parent, text, command, **kwargs)
 
     def find_active_wifi(self):
-        """Найти активное Wi-Fi подключение"""
+        """Находит активное подключение и его устройство (DEVICE)."""
         try:
-            # Способ 1: Ищем подключение, связанное с wlan0
             result = subprocess.run(
-                ['nmcli', '-t', '-f', 'NAME,DEVICE', 'connection', 'show', '--active'],
+                ['nmcli', '-t', '-f', 'NAME,DEVICE,TYPE', 'connection', 'show', '--active'],
                 capture_output=True,
                 text=True
             )
 
+            self.active_device = None
             if result.returncode == 0:
-                lines = result.stdout.strip().split('\n')
+                lines = [line for line in result.stdout.strip().split('\n') if line]
+
+                # 1) Предпочитаем Wi-Fi
                 for line in lines:
-                    if ':wlan0' in line:
-                        self.active_connection = line.split(':')[0]
+                    parts = line.split(':')
+                    name = parts[0] if parts else ''
+                    device = parts[1] if len(parts) > 1 else ''
+                    conn_type = parts[2] if len(parts) > 2 else ''
+                    if name and device and conn_type == 'wifi':
+                        self.active_connection = name
+                        self.active_device = device
                         return self.active_connection
 
-                # Способ 2: Если не нашли, берем первое активное
-                if lines and lines[0]:
-                    self.active_connection = lines[0].split(':')[0]
-                    return self.active_connection
+                # 2) Иначе — любое активное подключение с устройством
+                for line in lines:
+                    parts = line.split(':')
+                    name = parts[0] if parts else ''
+                    device = parts[1] if len(parts) > 1 else ''
+                    if name and device:
+                        self.active_connection = name
+                        self.active_device = device
+                        return self.active_connection
 
             return None
 
@@ -70,11 +84,60 @@ class DNSSettingsWindow:
             print(f"Ошибка поиска активного подключения: {e}")
             return None
 
+    def _resolve_device(self) -> str:
+        """Устройство для resolvectl: реальный DEVICE из nmcli (fallback wlan0)."""
+        return self.active_device or 'wlan0'
+
+    def _read_conn_dns(self):
+        """Сохраняет текущие DNS-настройки соединения для отката."""
+        if not self.active_connection:
+            return None
+        try:
+            result = subprocess.run(
+                ['nmcli', '-t', '-g', 'ipv4.dns,ipv4.ignore-auto-dns,ipv6.dns,ipv6.ignore-auto-dns',
+                 'connection', 'show', self.active_connection],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip().split('\n')
+        except Exception as e:
+            print(f"Не удалось сохранить текущие DNS: {e}")
+        return None
+
+    def _restore_conn_dns(self) -> bool:
+        """Возвращает прежние DNS-настройки соединения (откат)."""
+        if not self._prev_dns or not self.active_connection:
+            return False
+        try:
+            dns4, ignore4, dns6, ignore6 = (list(self._prev_dns) + [''] * 4)[:4]
+            args = ['nmcli', 'connection', 'modify', self.active_connection]
+            if dns4:
+                args += ['ipv4.dns', dns4]
+            if ignore4:
+                args += ['ipv4.ignore-auto-dns', ignore4]
+            if dns6:
+                args += ['ipv6.dns', dns6]
+            if ignore6:
+                args += ['ipv6.ignore-auto-dns', ignore6]
+            code, _out, _err = run_sudo(args, timeout=60)
+            return code == 0
+        except Exception as e:
+            print(f"Ошибка отката DNS: {e}")
+            return False
+
+    def _unbind_wheel(self):
+        """Снимает глобальную привязку <MouseWheel> (иначе скролл ломается в других окнах)."""
+        try:
+            if self.window is not None:
+                self.window.unbind_all("<MouseWheel>")
+        except tk.TclError:
+            pass
+
     def get_current_dns_settings(self):
         """Получить текущие настройки DNS из resolvectl"""
         try:
             result = subprocess.run(
-                ['resolvectl', 'status', 'wlan0'],
+                ['resolvectl', 'status', self._resolve_device()],
                 capture_output=True,
                 text=True
             )
@@ -129,108 +192,56 @@ class DNSSettingsWindow:
             return False, "Некорректный формат IP адреса"
 
 
-    def reset_to_auto(self, password):
-        """Сбросить на автоматические DNS с использованием пароля"""
+    def reset_to_auto(self):
+        """Сбросить на автоматические DNS (пароль вводит системный askpass)."""
         if not self.active_connection:
             show_error(self.window, "Ошибка", "Не найдено активное подключение")
             return False
 
         try:
+            # Сохраняем прежние настройки DNS для отката
+            self._prev_dns = self._read_conn_dns()
+
             # 1. Включить получение DNS от DHCP
-            modify1_cmd = [
-                'sudo', '-S', 'nmcli', 'connection', 'modify',
+            code, _out, err = run_sudo([
+                'nmcli', 'connection', 'modify',
                 self.active_connection,
                 'ipv4.ignore-auto-dns', 'no',
                 'ipv6.ignore-auto-dns', 'no'
-            ]
+            ], timeout=60)
 
-            process1 = subprocess.Popen(
-                modify1_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            stdout, stderr = process1.communicate(input=password + '\n')
-
-            if process1.returncode != 0:
-                show_error(self.window, "Ошибка", f"Не удалось изменить настройки DHCP:\n{stderr}")
+            if code != 0:
+                show_error(self.window, "Ошибка", f"Не удалось изменить настройки DHCP:\n{err}")
                 return False
 
             # 2. Очистить статические DNS
-            modify2_cmd = [
-                'sudo', '-S', 'nmcli', 'connection', 'modify',
-                self.active_connection, 'ipv4.dns', ''
-            ]
-
-            process2 = subprocess.Popen(
-                modify2_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
+            run_sudo(
+                ['nmcli', 'connection', 'modify', self.active_connection, 'ipv4.dns', ''],
+                timeout=60,
             )
-            stdout, stderr = process2.communicate(input=password + '\n')
-
-            modify3_cmd = [
-                'sudo', '-S', 'nmcli', 'connection', 'modify',
-                self.active_connection, 'ipv6.dns', ''
-            ]
-
-            process3 = subprocess.Popen(
-                modify3_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
+            run_sudo(
+                ['nmcli', 'connection', 'modify', self.active_connection, 'ipv6.dns', ''],
+                timeout=60,
             )
-            stdout, stderr = process3.communicate(input=password + '\n')
 
             # 3. Переподключить
-            down_cmd = ['sudo', '-S', 'nmcli', 'connection', 'down', self.active_connection]
-            down_process = subprocess.Popen(
-                down_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
+            run_sudo(['nmcli', 'connection', 'down', self.active_connection], timeout=60)
+            code, _out, err = run_sudo(
+                ['nmcli', 'connection', 'up', self.active_connection], timeout=90
             )
-            stdout, stderr = down_process.communicate(input=password + '\n')
 
-            up_cmd = ['sudo', '-S', 'nmcli', 'connection', 'up', self.active_connection]
-            up_process = subprocess.Popen(
-                up_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            stdout, stderr = up_process.communicate(input=password + '\n')
-
-            if up_process.returncode != 0:
-                show_error(self.window, "Ошибка", f"Не удалось подключиться:\n{stderr}")
+            if code != 0:
+                self._restore_conn_dns()
+                run_sudo(['nmcli', 'connection', 'up', self.active_connection], timeout=90)
+                show_error(
+                    self.window, "Ошибка",
+                    f"Не удалось подключиться:\n{err}\nПрежние настройки DNS восстановлены.",
+                )
                 return False
 
             # 4. Сбросить через resolvectl
-            revert_cmd = ['sudo', '-S', 'resolvectl', 'revert', 'wlan0']
-            revert_process = subprocess.Popen(
-                revert_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            stdout, stderr = revert_process.communicate(input=password + '\n')
-
-            route_cmd = ['sudo', '-S', 'resolvectl', 'default-route', 'wlan0', 'yes']
-            route_process = subprocess.Popen(
-                route_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            stdout, stderr = route_process.communicate(input=password + '\n')
+            run_sudo(['resolvectl', 'revert', self._resolve_device()], timeout=30)
+            run_sudo(['resolvectl', 'default-route', self._resolve_device(), 'yes'], timeout=30)
 
             return True
 
@@ -238,84 +249,51 @@ class DNSSettingsWindow:
             show_error(self.window, "Ошибка", f"Ошибка при сбросе DNS: {e}")
             return False
 
-    def set_custom_dns(self, dns_servers, password):
-        """Установить кастомные DNS с использованием пароля"""
+    def set_custom_dns(self, dns_servers):
+        """Установить кастомные DNS (пароль вводит системный askpass)."""
         if not self.active_connection:
             show_error(self.window, "Ошибка", "Не найдено активное подключение")
             return False
 
         try:
+            # Сохраняем прежние настройки DNS для отката
+            self._prev_dns = self._read_conn_dns()
+
             # 1. Установить кастомные DNS через nmcli
-            modify_cmd = [
-                'sudo', '-S', 'nmcli', 'connection', 'modify',
+            code, _out, err = run_sudo([
+                'nmcli', 'connection', 'modify',
                 self.active_connection,
                 'ipv4.dns', dns_servers,
                 'ipv4.ignore-auto-dns', 'yes'
-            ]
+            ], timeout=60)
 
-            modify_process = subprocess.Popen(
-                modify_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            stdout, stderr = modify_process.communicate(input=password + '\n')
-
-            if modify_process.returncode != 0:
-                show_error(self.window, "Ошибка", f"Не удалось установить DNS настройки:\n{stderr}")
+            if code != 0:
+                show_error(self.window, "Ошибка", f"Не удалось установить DNS настройки:\n{err}")
                 return False
 
-            # 2. Переподключить соединение
-            down_cmd = ['sudo', '-S', 'nmcli', 'connection', 'down', self.active_connection]
-            down_process = subprocess.Popen(
-                down_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            stdout, stderr = down_process.communicate(input=password + '\n')
-            # Игнорируем ошибки при отключении (соединение может быть уже отключено)
+            # 2. Переподключить соединение (ошибки down игнорируем — оно могло быть отключено)
+            run_sudo(['nmcli', 'connection', 'down', self.active_connection], timeout=60)
 
             # 3. Включить соединение
-            up_cmd = ['sudo', '-S', 'nmcli', 'connection', 'up', self.active_connection]
-            up_process = subprocess.Popen(
-                up_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
+            code, _out, err = run_sudo(
+                ['nmcli', 'connection', 'up', self.active_connection], timeout=90
             )
-            stdout, stderr = up_process.communicate(input=password + '\n')
 
-            if up_process.returncode != 0:
-                show_error(self.window, "Ошибка", f"Не удалось подключиться:\n{stderr}")
+            if code != 0:
+                self._restore_conn_dns()
+                run_sudo(['nmcli', 'connection', 'up', self.active_connection], timeout=90)
+                show_error(
+                    self.window, "Ошибка",
+                    f"Не удалось подключиться:\n{err}\nПрежние настройки DNS восстановлены.",
+                )
                 return False
 
-            # 4. Установить через resolvectl для текущей сессии
+            # 4. Установить через resolvectl для текущей сессии (ошибки некритичны)
             servers_list = dns_servers.split()
-            resolve_cmd = ['sudo', '-S', 'resolvectl', 'dns', 'wlan0'] + servers_list
-            resolve_process = subprocess.Popen(
-                resolve_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            stdout, stderr = resolve_process.communicate(input=password + '\n')
-            # Игнорируем ошибки, так как это не критично
+            run_sudo(['resolvectl', 'dns', self._resolve_device()] + servers_list, timeout=30)
 
             # 5. Отключить автоматический маршрут
-            route_cmd = ['sudo', '-S', 'resolvectl', 'default-route', 'wlan0', 'false']
-            route_process = subprocess.Popen(
-                route_cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            stdout, stderr = route_process.communicate(input=password + '\n')
+            run_sudo(['resolvectl', 'default-route', self._resolve_device(), 'false'], timeout=30)
 
             return True
 
@@ -393,19 +371,17 @@ class DNSSettingsWindow:
                 self.dns_vars[selected_dns].set(False)
 
             # Пользовательский DNS всегда имеет приоритет
-            def on_password_valid(password):
-                """Callback функция, вызываемая после успешного ввода пароля"""
-                if self.set_custom_dns(dns_servers, password):
-                    show_info(
-                        self.window,
-                        "Успех",
-                        (
-                            f"Пользовательские DNS успешно применены. "
-                            f"Подключение: {self.active_connection}. DNS: {dns_servers}"
-                        ),
-                    )
-                    # Закрываем окно после успешного применения
-                    self.window.destroy()
+            if self.set_custom_dns(dns_servers):
+                show_info(
+                    self.window,
+                    "Успех",
+                    (
+                        f"Пользовательские DNS успешно применены. "
+                        f"Подключение: {self.active_connection}. DNS: {dns_servers}"
+                    ),
+                )
+                # Закрываем окно после успешного применения
+                self.window.destroy()
 
         # Если используется чекбокс (пресет)
         elif selected_dns:
@@ -413,38 +389,34 @@ class DNSSettingsWindow:
             dns_display = f"{selected_dns} ({dns_servers})"
             print(f"Используется пресет DNS: {selected_dns}")
 
-            def on_password_valid(password):
-                """Callback функция, вызываемая после успешного ввода пароля"""
-                if self.set_custom_dns(dns_servers, password):
-                    # Показываем сообщение и ждем, пока пользователь нажмет OK
-                    show_info(
-                        self.window,
-                        "Успех",
-                        (
-                            f"Пользовательские DNS успешно применены. "
-                            f"Подключение: {self.active_connection}. DNS: {dns_servers}"
-                        ),
-                    )
-                    # Закрываем окно после того, как пользователь нажал OK
-                    self.window.destroy()
+            if self.set_custom_dns(dns_servers):
+                # Показываем сообщение и ждем, пока пользователь нажмет OK
+                show_info(
+                    self.window,
+                    "Успех",
+                    (
+                        f"Пользовательские DNS успешно применены. "
+                        f"Подключение: {self.active_connection}. DNS: {dns_servers}"
+                    ),
+                )
+                # Закрываем окно после того, как пользователь нажал OK
+                self.window.destroy()
 
         # Если выбрано "Автоматический" (сброс)
         elif self.dns_vars["Автоматический"].get():
             print("Выбран сброс на автоматические DNS")
 
-            def on_password_valid(password):
-                """Callback функция, вызываемая после успешного ввода пароля"""
-                if self.reset_to_auto(password):
-                    show_info(
-                        self.window,
-                        "Успех",
-                        (
-                            f"DNS сброшены на автоматические (DHCP). "
-                            f"Подключение: {self.active_connection}"
-                        ),
-                    )
-                    # Закрываем окно после успешного применения
-                    self.window.destroy()
+            if self.reset_to_auto():
+                show_info(
+                    self.window,
+                    "Успех",
+                    (
+                        f"DNS сброшены на автоматические (DHCP). "
+                        f"Подключение: {self.active_connection}"
+                    ),
+                )
+                # Закрываем окно после успешного применения
+                self.window.destroy()
 
         # Если ничего не выбрано
         else:
@@ -461,13 +433,6 @@ class DNSSettingsWindow:
             else:
                 show_error(self.window, "Ошибка", "Не выбран ни один DNS сервер")
             return
-
-        # Открываем окно ввода пароля
-        password_window = SudoPasswordWindow(
-            self.window,
-            on_password_valid=on_password_valid
-        )
-        password_window.run()
 
     def create_dns_group(self, parent, group_name, dns_list):
         """Создает группу чекбоксов DNS"""
@@ -539,6 +504,8 @@ class DNSSettingsWindow:
         self.window = tk.Toplevel(self.parent)
         self.window.title("Настройки DNS")
         self.window.configure(bg='#182030')
+        # Снимаем глобальную привязку колеса при закрытии окна
+        self.window.bind("<Destroy>", lambda _e: self._unbind_wheel(), add="+")
 
         # Основной фрейм
         main_frame = tk.Frame(self.window, bg='#182030')
@@ -813,7 +780,7 @@ class DNSSettingsWindow:
         """Получить текущие DNS серверы из resolvectl"""
         try:
             result = subprocess.run(
-                ['resolvectl', 'status', 'wlan0'],
+                ['resolvectl', 'status', self._resolve_device()],
                 capture_output=True,
                 text=True
             )
