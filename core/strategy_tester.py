@@ -9,7 +9,21 @@ from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 import re
 import os
+import shlex
 from core.strategy_data import natural_sort_key
+from core.sudo_helper import run_sudo
+
+# Коды, означающие, что сервер ответил (403/404/405 сюда не входят: они не
+# доказывают доступность ресурса).
+DEFAULT_SUCCESS_CODES = {"200", "204", "301", "302", "303", "304", "307", "308"}
+
+# Цели, для которых «неуспешный» код на самом деле ожидаем.
+EXPECTED_HTTP_CODES = {
+    "generate_204": {"204"},
+    "YouTube_API": {"404"},
+    "DiscordUpdates": {"404"},
+    "YouTubeVideoRedirect": {"301", "302", "303", "307", "308"},
+}
 
 class StrategyTester:
     """
@@ -35,13 +49,19 @@ class StrategyTester:
         # Результаты тестирования
         self.results = []
 
-    async def _smart_curl_check(self, url: str, method: str = "HEAD") -> Dict[str, any]:
+    async def _smart_curl_check(
+        self,
+        url: str,
+        method: str = "HEAD",
+        extra_args: Optional[List[str]] = None,
+        expected_codes: Optional[set] = None,
+    ) -> Dict[str, any]:
         """
         Универсальная "умная" проверка URL, совместимая с zapret на Steam Deck.
         Возвращает словарь с результатами.
         """
         # Базовые аргументы curl, как в предложенном решении
-        cmd = [
+        base_args = [
             "curl",
             "-s",                # Тихий режим
             "-o", "/dev/null",   # Не выводить тело
@@ -52,11 +72,13 @@ class StrategyTester:
             "--connect-timeout", "1",
             "--max-time", "3",
             "--user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "-w", "%{http_code}::%{time_total}::%{num_redirects}",
-            url
         ]
+        # Аргументы протокола (HTTP/1.1, TLS1.2, TLS1.3) больше не теряются.
+        if extra_args:
+            base_args.extend(extra_args)
+        base_args.extend(["-w", "%{http_code}::%{time_total}::%{num_redirects}", url])
         # Убираем возможные пустые строки из списка
-        cmd = [arg for arg in cmd if arg]
+        cmd = [arg for arg in base_args if arg]
 
         result = {
             "success": False,
@@ -85,8 +107,9 @@ class StrategyTester:
                 result["http_code"] = int(http_code) if http_code.isdigit() else 0
                 result["time_taken"] = time_taken
 
-                # ЛОГИКА УСПЕХА
-                success_codes = {'200', '204', '301', '302', '303', '304', '307', '308', '403', '404', '405'}
+                # ЛОГИКА УСПЕХА: 403/404/405 не доказывают доступность ресурса,
+                # кроме целей с ожидаемым кодом (например, YouTube_API → 404).
+                success_codes = expected_codes or DEFAULT_SUCCESS_CODES
                 if http_code in success_codes:
                     result["success"] = True
                     result["details"] = f"HTTP: код {http_code}, время {time_taken}с"
@@ -120,19 +143,16 @@ class StrategyTester:
         print("⚠️  Получен запрос на остановку тестирования...")
 
     def _run_command(self, command: str, use_sudo: bool = False, timeout: int = 10) -> Tuple[bool, str]:
-        """
-        Выполняет команду с опциональным sudo
-        """
+        """Выполняет команду; при use_sudo — через sudo -A (пароль спрашивает askpass)."""
         try:
-            if use_sudo and self.sudo_password:
-                full_cmd = f"echo '{self.sudo_password}' | sudo -S {command}"
-            elif use_sudo:
-                full_cmd = f"sudo {command}"
-            else:
-                full_cmd = command
+            if use_sudo:
+                code, out, err = run_sudo(shlex.split(command), timeout=timeout)
+                if code == 0:
+                    return True, (out or "").strip()
+                return False, (err or out or "").strip()
 
             result = subprocess.run(
-                full_cmd,
+                command,
                 shell=True,
                 capture_output=True,
                 text=True,
@@ -582,8 +602,12 @@ class StrategyTester:
             ("TLS1.3", ["--tlsv1.3", "--tls-max", "1.3"])
         ]
 
+        expected_codes = EXPECTED_HTTP_CODES.get(target.get("name", ""))
+
         for proto_name, proto_args in protocols:
-            test_result = await self._curl_request(url, proto_name, proto_args)
+            test_result = await self._curl_request(
+                url, proto_name, proto_args, expected_codes=expected_codes
+            )
 
             if test_result["success"]:
                 result.update(test_result)
@@ -596,29 +620,9 @@ class StrategyTester:
         result["details"] = "Все протоколы не сработали"
         return result
 
-    def _is_special_target(self, target_name: str, http_code: str) -> Tuple[bool, str]:
-        """
-        Проверяет, является ли цель специальной с ожидаемым HTTP кодом
-
-        Возвращает: (является_ли_специальной, пояснение)
-        """
-        special_targets = {
-            'generate_204': ('204', 'ожидаемый код 204 для generate_204'),
-            'YouTube_API': ('404', 'ожидаемый код 404 для API (только HEAD запрос)'),
-            'YouTubeVideoRedirect': ('302', 'ожидаемая переадресация'),
-            'DiscordUpdates': ('404', 'ожидаемый код 404 для updates endpoint'),
-        }
-
-        if target_name in special_targets:
-            expected_code, explanation = special_targets[target_name]
-            if http_code == expected_code:
-                return True, explanation
-            else:
-                return True, f"получен код {http_code} вместо ожидаемого {expected_code}"
-
-        return False, ""
-
-    async def _curl_request(self, url: str, protocol: str, args: List[str]) -> Dict:
+    async def _curl_request(
+        self, url: str, protocol: str, args: List[str], expected_codes: Optional[set] = None
+    ) -> Dict:
         """Выполняет HTTP тест через curl с "умными" параметрами"""
         # Пропускаем для Rutracker, так как у него свой тест
         if "rutracker.org" in url:
@@ -629,8 +633,10 @@ class StrategyTester:
                 "details": "Rutracker тестируется отдельным методом"
             }
 
-        # Используем новую "умную" проверку
-        curl_result = await self._smart_curl_check(url, method="HEAD")
+        # Используем новую "умную" проверку с аргументами протокола
+        curl_result = await self._smart_curl_check(
+            url, method="HEAD", extra_args=args, expected_codes=expected_codes
+        )
 
         # Обогащаем результат информацией о протоколе
         curl_result["protocol"] = protocol
@@ -859,18 +865,22 @@ class StrategyTester:
 
         # Убиваем оставшиеся процессы nfqws
         self._run_command("pkill -9 nfqws", use_sudo=True)
-        time.sleep(2)
+        await asyncio.sleep(2)
 
         try:
-            # Подготавливаем временный конфиг
-            temp_config = self._prepare_strategy_config(strategy_name)
-
             # ВРЕМЕННО ЗАМЕНЯЕМ КОНФИГ И ЗАПУСКАЕМ СЛУЖБУ
 
             # 1. Создаем бэкап оригинального config.txt
             config_file = self.project_root / "config.txt"
+            backup_config = config_file.with_suffix('.test_backup.txt')
+
+            # Если остался бэкап от прерванного/упавшего теста — сначала восстанавливаем его.
+            if backup_config.exists():
+                shutil.copy2(backup_config, config_file)
+                backup_config.unlink()
+                print("  ⚠️  Найден бэкап от прерванного теста — config.txt восстановлен")
+
             if config_file.exists():
-                backup_config = config_file.with_suffix('.test_backup.txt')
                 shutil.copy2(config_file, backup_config)
 
                 # 2. Копируем конфиг стратегии в основной config.txt
@@ -887,7 +897,7 @@ class StrategyTester:
 
                 # Останавливаем службу
                 self._run_command("systemctl stop zapret", use_sudo=True)
-                time.sleep(2)
+                await asyncio.sleep(2)
 
                 # Запускаем службу (она использует обновленный config.txt)
                 success, output = self._run_command("systemctl start zapret", use_sudo=True, timeout=10)
@@ -901,7 +911,7 @@ class StrategyTester:
 
                 # Даем время на запуск
                 print("  Ожидание запуска (5 секунд)...")
-                time.sleep(5)
+                await asyncio.sleep(5)
 
                 # Проверяем статус службы
                 status_success, status_output = self._run_command("systemctl is-active zapret", use_sudo=False)
@@ -972,7 +982,7 @@ class StrategyTester:
                 # 1. Останавливаем службу
                 self._run_command("systemctl stop zapret", use_sudo=True)
                 self._run_command("pkill -9 nfqws", use_sudo=True)
-                time.sleep(2)
+                await asyncio.sleep(2)
 
                 # 2. Восстанавливаем оригинальный config.txt
                 if 'backup_config' in locals() and backup_config.exists():
@@ -1045,7 +1055,8 @@ class StrategyTester:
                                 passed = True
                             break
 
-                    if found and not passed:
+                    # Нет результата — цель не подтверждена, стратегия не прошла.
+                    if not found or not passed:
                         youtube_passed = False
             else:
                 # Нет YouTube тестов - считаем что не проверяли
@@ -1064,7 +1075,8 @@ class StrategyTester:
                                 passed = True
                             break
 
-                    if found and not passed:
+                    # Нет результата — цель не подтверждена, стратегия не прошла.
+                    if not found or not passed:
                         discord_passed = False
             else:
                 # Нет Discord тестов - считаем что не проверяли
@@ -1118,11 +1130,16 @@ class StrategyTester:
                     for target in youtube_critical_targets:
                         target_name = target["name"]
                         # Ищем результат для этой цели
+                        result_found = False
                         for target_result in target_results:
                             if target_result.get("target_name") == target_name:
+                                result_found = True
                                 if not target_result.get("success", False):
                                     critical_success = False
-                                    break
+                                break
+                        # Отсутствие результата — цель не подтверждена.
+                        if not result_found:
+                            critical_success = False
 
                     if critical_success:
                         youtube_passed = True
@@ -1139,11 +1156,16 @@ class StrategyTester:
                     for target in discord_critical_targets:
                         target_name = target["name"]
                         # Ищем результат для этой цели
+                        result_found = False
                         for target_result in target_results:
                             if target_result.get("target_name") == target_name:
+                                result_found = True
                                 if not target_result.get("success", False):
                                     critical_success = False
-                                    break
+                                break
+                        # Отсутствие результата — цель не подтверждена.
+                        if not result_found:
+                            critical_success = False
 
                     if critical_success:
                         discord_passed = True
@@ -1311,6 +1333,14 @@ class StrategyTester:
                     non_working_strategies.append(result)
                     result["critical_fail"] = True
                     result["critical_fail_reason"] = "YouTube и Discord не работают"
+            elif mode == "dpi":
+                # DPI-режим: критических целей YouTube/Discord нет — оцениваем по проценту.
+                if success_rate >= 60:
+                    working_strategies.append(result)
+                else:
+                    non_working_strategies.append(result)
+                    result["critical_fail"] = True
+                    result["critical_fail_reason"] = "Эффективность ниже порога (менее 60%)"
             else:
                 # СТАНДАРТНЫЙ РЕЖИМ - старая логика
                 youtube_passed = result.get('youtube_passed', False)
@@ -1320,7 +1350,7 @@ class StrategyTester:
                 if success_rate < 60:
                     non_working_strategies.append(result)
                     result["critical_fail"] = True
-                    result["critical_fail_reason"] = f"Низкая эффективность"
+                    result["critical_fail_reason"] = "Эффективность ниже порога (менее 60%)"
                     continue
 
                 # Если процент успеха ≥ 60%, проверяем YouTube/Discord
@@ -2273,19 +2303,21 @@ class StrategyTester:
                     if success_rate >= 60 and youtube_passed is True and discord_passed is True:
                         working_names.append(result.get('strategy', ''))
 
-            if working_names:
-                try:
-                    # Сохраняем в файл working_strategies.txt
-                    working_strategies_file = self.utils_dir / "working_strategies.txt"
-                    with open(working_strategies_file, 'w', encoding='utf-8') as f:
-                        for name in working_names:
-                            if name:  # Проверяем что имя не пустое
-                                f.write(name + '\n')
+            try:
+                # Всегда перезаписываем файл: пустой список означает «рабочих нет».
+                working_strategies_file = self.utils_dir / "working_strategies.txt"
+                with open(working_strategies_file, 'w', encoding='utf-8') as f:
+                    for name in working_names:
+                        if name:  # Проверяем что имя не пустое
+                            f.write(name + '\n')
 
-                    mode_label = "YouTube/Discord" if mode == "YouTube/Discord" else "DPI" if mode == "dpi" else "стандартный"
+                mode_label = "YouTube/Discord" if mode == "YouTube/Discord" else "DPI" if mode == "dpi" else "стандартный"
+                if working_names:
                     print(f"\n💾 Сохранено {len(working_names)} рабочих стратегий для режима '{mode_label}'")
-                except Exception as e:
-                    print(f"⚠️ Не удалось сохранить список рабочих стратегий: {e}")
+                else:
+                    print(f"\n💾 Рабочих стратегий нет — working_strategies.txt очищен (режим '{mode_label}')")
+            except Exception as e:
+                print(f"⚠️ Не удалось сохранить список рабочих стратегий: {e}")
 
             # ГЕНЕРИРУЕМ ОТЧЕТ С УЧЕТОМ РЕЖИМА
             report_filename = None

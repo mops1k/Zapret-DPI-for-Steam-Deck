@@ -91,35 +91,16 @@ PATH_MAP = {
 }
 
 # Плейсхолдеры, которые умеет раскрывать zapret/system/starter.sh.
-KNOWN_PLACEHOLDERS = {
-    "list_general",
-    "list_general_user",
-    "list_exclude",
-    "list_exclude_user",
-    "ipset_all",
-    "ipset_all_user",
-    "ipset_exclude",
-    "ipset_exclude_user",
-    "list_google",
-    "gw",
-    "other",
-    "quicgoogle",
-    "tlsgoogle",
-    "tls4pda",
-    "tlsmax",
-    "stun",
-    "stun2",
-    "dbankcloud",
-    "quic4pda",
-    "quic5ka",
-    "quicrutube",
-    "quicsteam",
-    "quictencent",
-    "tls5ka",
-    "tlssochi",
-    "tlssferum",
-    "GameFilter",
-}
+# Список вычисляется из самого starter.sh, чтобы не расходиться с ним.
+def _starter_placeholders() -> set[str]:
+    starter = REPO_ROOT / "zapret" / "system" / "starter.sh"
+    if not starter.is_file():
+        return set()
+    text = starter.read_text(encoding="utf-8")
+    return set(re.findall(r"\\\{([A-Za-z0-9_]+)\\\}", text))
+
+
+KNOWN_PLACEHOLDERS = _starter_placeholders() | {"GameFilter"}
 
 
 def extract_command(bat_text: str) -> str:

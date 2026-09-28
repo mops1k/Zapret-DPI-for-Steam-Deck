@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 import threading
 import time
 import os
@@ -10,12 +10,8 @@ import contextlib
 from pathlib import Path
 from ui.components.button_styler import create_hover_button
 from core.dpi_utils import place_toplevel_centered_on_parent
-from ui.windows.sudo_password_window import SudoPasswordWindow
 from datetime import datetime, timedelta
 
-
-# Добавляем путь к core для импорта strategy_tester
-sys.path.append(str(Path(__file__).parent.parent.parent / 'core'))
 
 from core.game_presets import reapply_active_preset_to_config
 
@@ -48,7 +44,7 @@ class StrategyTesterWindow:
         self.testing = False
         self.results = []
         self.current_tester = None
-        self.current_password = None
+        self.test_thread = None
 
         # Добавить эти переменные для таймеров
         self.start_time = None
@@ -61,16 +57,18 @@ class StrategyTesterWindow:
         self.test_button = None
 
         try:
-            from strategy_tester import StrategyTester as ST, test_all_strategies as tas
+            from core.strategy_tester import StrategyTester as ST, test_all_strategies as tas
             self.StrategyTester = ST
             self.test_all_strategies = tas
         except ImportError as e:
-            print(f"Warning: Could not import strategy_tester: {e}")
+            print(f"Warning: Could not import core.strategy_tester: {e}")
 
     def run(self):
         """Запускает окно тестировщика стратегий"""
         if not self.StrategyTester:
-            messagebox.showerror("Ошибка", "Не удалось загрузить модуль тестировщика стратегий")
+            from ui.components.custom_messagebox import show_error
+
+            show_error(self.parent, "Ошибка", "Не удалось загрузить модуль тестировщика стратегий")
             return
 
         self.window = tk.Toplevel(self.parent)
@@ -266,10 +264,17 @@ class StrategyTesterWindow:
         else:
             self.stop_test()   # Останавливаем тест
 
+    def _safe_after(self, func, *args):
+        """Планирует вызов в главном потоке, не падая на уничтоженном окне."""
+        try:
+            if self.window is not None and self.window.winfo_exists():
+                self.window.after(0, func, *args)
+        except (tk.TclError, RuntimeError):
+            pass
+
     def log_message(self, message, color='white'):
         """Добавляет сообщение в область вывода (безопасно для потоков)"""
-        # Используем after для безопасного обновления GUI из другого потока
-        self.window.after(0, self._log_message_thread_safe, message, color)
+        self._safe_after(self._log_message_thread_safe, message, color)
 
     def _log_message_thread_safe(self, message, color):
         """Безопасное добавление сообщения в главном потоке"""
@@ -327,12 +332,14 @@ class StrategyTesterWindow:
         if self.testing:
             return
 
-        # Запрашиваем пароль sudo
-        password_window = SudoPasswordWindow(self.window)
-        password = password_window.run()
+        # Пароль sudo вводится системным askpass в момент выполнения команды (sudo -A)
+        from core.sudo_helper import sudo_available
 
-        if not password:
-            self.log_message("❌ Тестирование отменено: не введен пароль sudo", "#ff3b30")
+        if not sudo_available():
+            self.log_message(
+                "❌ Тестирование отменено: sudo или askpass-хелпер недоступны",
+                "#ff3b30",
+            )
             return
 
         # Меняем состояние кнопок
@@ -344,7 +351,7 @@ class StrategyTesterWindow:
         self.clear_log()
 
         # Оцениваем общее время (примерно 30 секунд на стратегию)
-        tester = self.StrategyTester(self.project_root, password)
+        tester = self.StrategyTester(self.project_root)
         all_strategies = tester.get_available_strategies()
         estimated_time = len(all_strategies) * 30 if all_strategies else 300  # 5 минут по умолчанию
 
@@ -357,12 +364,14 @@ class StrategyTesterWindow:
         self.log_message("")
 
         # Запускаем тестирование в отдельном потоке
-        thread = threading.Thread(
+        # Режим читаем в главном потоке и передаём в поток тестирования
+        mode = self.mode_var.get()
+        self.test_thread = threading.Thread(
             target=self.run_test_thread,
-            args=(password,),  # Только один аргумент - пароль
+            args=(mode,),
             daemon=True
         )
-        thread.start()
+        self.test_thread.start()
 
     def stop_test(self):
         """Останавливает тестирование"""
@@ -383,16 +392,10 @@ class StrategyTesterWindow:
                     self.log_message(f"⚠️  Ошибка при остановке: {str(e)}", "#ff9500")
 
 
-    def run_test_thread(self, sudo_password):
+    def run_test_thread(self, mode):
         """Запускает тестирование в отдельном потоке"""
         old_stdout = None
         try:
-            # Сохраняем пароль для использования в командах
-            self.current_password = sudo_password
-
-            # Получаем выбранный режим
-            mode = self.mode_var.get()
-
             # Создаем перехватчик вывода
             redirector = OutputRedirector(self.log_message)
 
@@ -405,7 +408,7 @@ class StrategyTesterWindow:
             asyncio.set_event_loop(loop)
 
             # Создаем тестировщик и сохраняем ссылку
-            tester = self.StrategyTester(self.project_root, sudo_password)
+            tester = self.StrategyTester(self.project_root)
             self.current_tester = tester  # Сохраняем для остановки
 
             # Получаем стратегии для тестирования
@@ -430,7 +433,9 @@ class StrategyTesterWindow:
 
             # Проверяем, была ли остановка
             if not self.testing:
-                self.window.after(0, self.log_message, "\n⏹️ Тестирование остановлено пользователем", "#ff9500")
+                self._safe_after(
+                    self.log_message, "\n⏹️ Тестирование остановлено пользователем", "#ff9500"
+                )
                 return
 
             # Восстанавливаем stdout
@@ -438,8 +443,6 @@ class StrategyTesterWindow:
 
             if results and len(results) > 0:
                 # Классифицируем стратегии в зависимости от режима
-                mode = self.mode_var.get()
-
                 if mode == "YouTube/Discord":
                     # РЕЖИМ YouTube/Discord - классификация только по критическим тестам
                     good_results = []      # Оба работают
@@ -607,7 +610,7 @@ class StrategyTesterWindow:
                     # Применяем лучшую хорошую стратегию
                     if self.apply_best_strategy(best_strategy):
                         # Перезапускаем службу
-                        self.restart_service_with_strategy(best_strategy, sudo_password)
+                        self.restart_service_with_strategy(best_strategy)
                     else:
                         self.log_message("⚠️  Не удалось применить стратегию автоматически", "#ff9500")
 
@@ -636,7 +639,7 @@ class StrategyTesterWindow:
                 if report_path.exists():
                     html_files = list(report_path.glob("*.html"))
                     if html_files:
-                        self.window.after(0, lambda: self.report_button.config(state=tk.NORMAL))
+                        self._safe_after(lambda: self.report_button.config(state=tk.NORMAL))
                         latest_report = max(html_files, key=lambda x: x.stat().st_mtime)
                         self.log_message(f"\n📄 HTML отчет сохранен: {latest_report.name}", "#4fc3f7")
 
@@ -657,10 +660,6 @@ class StrategyTesterWindow:
             if 'old_stdout' in locals():
                 sys.stdout = old_stdout
 
-            # Очищаем сохраненный пароль
-            if hasattr(self, 'current_password'):
-                del self.current_password
-
             # Закрываем loop
             try:
                 if 'loop' in locals():
@@ -669,7 +668,7 @@ class StrategyTesterWindow:
                 pass
 
             # Восстанавливаем состояние кнопок
-            self.window.after(0, self.on_test_complete)
+            self._safe_after(self.on_test_complete)
     def on_test_complete(self):
         """Вызывается при завершении тестирования"""
         self.testing = False
@@ -782,7 +781,7 @@ class StrategyTesterWindow:
             self.log_message(f"❌ Ошибка применения стратегии: {str(e)}", "#ff3b30")
             return False
 
-    def restart_service_with_strategy(self, strategy_name, password):
+    def restart_service_with_strategy(self, strategy_name):
         """
         Перезапускает службу zapret с примененной стратегией
         """
@@ -819,20 +818,23 @@ class StrategyTesterWindow:
 
     def _run_command(self, command, use_sudo=False, timeout=10):
         """
-        Вспомогательный метод для выполнения команд (аналогичный из strategy_tester.py)
+        Вспомогательный метод для выполнения команд (аналогичный из strategy_tester.py).
+        При use_sudo пароль вводит системный askpass (sudo -A), приложение его не хранит.
         """
+        import shlex
         import subprocess
 
+        from core.sudo_helper import run_sudo
+
         try:
-            if use_sudo and hasattr(self, 'current_password') and self.current_password:
-                full_cmd = f"echo '{self.current_password}' | sudo -S {command}"
-            elif use_sudo:
-                full_cmd = f"sudo {command}"
-            else:
-                full_cmd = command
+            if use_sudo:
+                code, out, err = run_sudo(shlex.split(command), timeout=timeout)
+                if code == 0:
+                    return True, (out or "").strip()
+                return False, (err or out or "").strip()
 
             result = subprocess.run(
-                full_cmd,
+                command,
                 shell=True,
                 capture_output=True,
                 text=True,
@@ -850,11 +852,21 @@ class StrategyTesterWindow:
             return False, str(e)
 
     def on_close(self):
-        """Закрывает окно"""
+        """Закрывает окно, останавливая тест, если он ещё идёт."""
+        was_testing = self.testing
         self.testing = False
-        # Очищаем сохраненный пароль
-        if hasattr(self, 'current_password'):
-            del self.current_password
+
+        # Просим тестер остановиться и ждём завершения потока, чтобы он не менял
+        # config.txt и не перезапускал службу после закрытия окна.
+        if was_testing:
+            if self.current_tester:
+                try:
+                    self.current_tester.stop_testing()
+                except Exception as e:
+                    print(f"Не удалось остановить тестер: {e}")
+            thread = getattr(self, "test_thread", None)
+            if thread is not None and thread.is_alive():
+                thread.join(timeout=5)
 
         # Обновляем стратегию в главном окне
         try:

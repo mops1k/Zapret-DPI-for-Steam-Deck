@@ -50,6 +50,57 @@ PLACEHOLDER_FILES = {
     "GameFilter": None,  # подставляется портами, файла нет
 }
 
+# Алиасы конструктора стратегий (STRATEGY_OPTIONS): у менеджера один общий
+# ipset-файл и один общий hostlist — см. подстановки в starter.sh.
+PLACEHOLDER_FILES.update({
+    "ipset_all2": "files/lists/ipset-all.txt",
+    "ipset_base": "files/lists/ipset-all.txt",
+    "ipset_cloudflare": "files/lists/ipset-all.txt",
+    "ipset_cloudflare1": "files/lists/ipset-all.txt",
+    "ipset_discord": "files/lists/ipset-all.txt",
+    "ipset_dns": "files/lists/ipset-all.txt",
+    "cloudflare_ipset": "files/lists/ipset-all.txt",
+    "discord": "files/lists/list-general.txt",
+    "telegram": "files/lists/list-general.txt",
+    "youtube": "files/lists/list-general.txt",
+    "rutracker": "files/lists/list-general.txt",
+    "hosts": "files/lists/list-general.txt",
+    "netrogat": "files/lists/list-general.txt",
+    "other2": "files/lists/list-general.txt",
+    "russia_blacklist": "files/lists/list-general.txt",
+    "russia_youtube_rtmps": "files/lists/list-general.txt",
+})
+
+sys.path.insert(0, str(REPO_ROOT))
+try:
+    from core.game_presets import GAME_PRESETS
+    from core.strategy_data import STRATEGY_OPTIONS
+except Exception as exc:  # pragma: no cover
+    STRATEGY_OPTIONS, GAME_PRESETS = {}, {}
+    print(f"Предупреждение: не удалось загрузить данные стратегий: {exc}", file=sys.stderr)
+
+
+def data_lines() -> list[tuple[str, str]]:
+    """Строки конфигураций из STRATEGY_OPTIONS и GAME_PRESETS (источник, строка)."""
+    lines: list[tuple[str, str]] = []
+    for category, options in STRATEGY_OPTIONS.items():
+        for name, command in options.items():
+            for line in (command or "").splitlines():
+                if line.strip():
+                    lines.append((f"strategy_data:{category}/{name}", line.strip()))
+    for preset_id, preset in GAME_PRESETS.items():
+        for line in preset.get("lines") or []:
+            if line.strip():
+                lines.append((f"game_presets:{preset_id}", line.strip()))
+        for field, proto in (("game_filter_tcp", "tcp"), ("game_filter_udp", "udp")):
+            value = (preset.get(field) or "").strip()
+            if "{GameFilter}" in value:
+                # Самоссылка: подстановка не изменит config.txt (no-op).
+                continue
+            if value:
+                lines.append((f"game_presets:{preset_id}:{field}", f"--filter-{proto}={value}"))
+    return lines
+
 
 def starter_placeholders() -> set[str]:
     text = STARTER.read_text(encoding="utf-8")
@@ -66,9 +117,12 @@ def check_placeholders() -> list[str]:
         found = set(re.findall(r"\{([A-Za-z0-9_]+)\}", strategy.read_text(encoding="utf-8")))
         for name in found:
             used.setdefault(name, set()).add(strategy.name)
+    for source, line in data_lines():
+        for name in set(re.findall(r"\{([A-Za-z0-9_]+)\}", line)):
+            used.setdefault(name, set()).add(source)
     for name, files in sorted(used.items()):
         if name not in supported:
-            problems.append(f"плейсхолдер {{{name}}} не раскрывается starter.sh (используется в: {', '.join(sorted(files))})")
+            problems.append(f"плейсхолдер {{{name}}} не раскрывается starter.sh (используется в: {', '.join(sorted(files)[:3])})")
         elif name in PLACEHOLDER_FILES and PLACEHOLDER_FILES[name] is not None:
             if not (REPO_ROOT / PLACEHOLDER_FILES[name]).is_file():
                 problems.append(f"нет файла для {{{name}}}: {PLACEHOLDER_FILES[name]}")
@@ -91,6 +145,29 @@ def check_format() -> list[str]:
                 problems.append(f"{strategy.name}:{index}: --new не в конце строки")
             if "\r" in line:
                 problems.append(f"{strategy.name}:{index}: CR в строке")
+    for source, line in data_lines():
+        if not line.startswith("--"):
+            problems.append(f"{source}: строка не начинается с --")
+        if "--new" in line and not line.endswith("--new"):
+            problems.append(f"{source}: --new не в конце строки")
+        if "\r" in line:
+            problems.append(f"{source}: CR в строке")
+        if "{GameFilter}" in line and "filter-" not in line:
+            problems.append(f"{source}: {{GameFilter}} вне --filter-* (не раскроется)")
+    for category, options in STRATEGY_OPTIONS.items():
+        for name, command in options.items():
+            command = (command or "").strip()
+            if not command:
+                continue
+            if not command.splitlines()[-1].strip().endswith("--new"):
+                problems.append(
+                    f"strategy_data:{category}/{name}: команда не заканчивается --new "
+                    "(профили сольются)"
+                )
+    for preset_id, preset in GAME_PRESETS.items():
+        for index, line in enumerate(preset.get("lines") or [], start=1):
+            if line.strip() and not line.strip().endswith("--new"):
+                problems.append(f"game_presets:{preset_id}:{index}: строка не заканчивается --new")
     return problems
 
 
@@ -99,22 +176,26 @@ def dry_run(arch: str) -> list[str]:
     if not binary.is_file():
         return [f"нет бинарника {binary}"]
     problems: list[str] = []
+
+    def check_args(source: str, args: str) -> None:
+        for name, rel in PLACEHOLDER_FILES.items():
+            args = args.replace("{" + name + "}", str(REPO_ROOT / rel) if rel else "12")
+        proc = subprocess.run(
+            [str(binary), "--dry-run", "--qnum=200", *args.split()],
+            capture_output=True, text=True, timeout=20,
+        )
+        if proc.returncode != 0:
+            err = (proc.stderr or proc.stdout).strip().splitlines()
+            problems.append(f"{source}: nfqws --dry-run код {proc.returncode}: {err[-1] if err else ''}")
+
     for strategy in sorted(STRATEGY_DIR.iterdir()):
         if not strategy.is_file():
             continue
         for index, line in enumerate(strategy.read_text(encoding="utf-8").splitlines(), start=1):
-            if not line.strip():
-                continue
-            args = line
-            for name, rel in PLACEHOLDER_FILES.items():
-                args = args.replace("{" + name + "}", str(REPO_ROOT / rel) if rel else "12")
-            proc = subprocess.run(
-                [str(binary), "--dry-run", "--qnum=200", *args.split()],
-                capture_output=True, text=True, timeout=20,
-            )
-            if proc.returncode != 0:
-                err = (proc.stderr or proc.stdout).strip().splitlines()
-                problems.append(f"{strategy.name}:{index}: nfqws --dry-run код {proc.returncode}: {err[-1] if err else ''}")
+            if line.strip():
+                check_args(f"{strategy.name}:{index}", line)
+    for source, line in data_lines():
+        check_args(source, line)
     return problems
 
 

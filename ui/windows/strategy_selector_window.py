@@ -1,8 +1,8 @@
 import tkinter as tk
 import os
-from tkinter import messagebox
+from ui.components.custom_messagebox import show_error
 from ui.components.button_styler import create_hover_button
-from core.dpi_utils import place_toplevel_centered_on_parent
+from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set
 from core.strategy_data import natural_sort_key
 from ui.windows.strategy_window import StrategyWindow
 from ui.windows.custom_strategy_window import CustomStrategyWindow
@@ -25,7 +25,7 @@ class AutoSelectionWindow:
         """Настройка свойств окна"""
         self.root.configure(bg='#182030')
         self.root.transient(self.parent)
-        self.root.grab_set()
+        safe_grab_set(self.root)
 
         # Обработчик закрытия окна
         self.root.protocol("WM_DELETE_WINDOW", self.go_back)
@@ -88,7 +88,7 @@ class AutoSelectionWindow:
             tester_window.run()
         except Exception as e:
             print(f"Ошибка открытия тестировщика: {e}")
-            messagebox.showerror("Ошибка", f"Не удалось открыть тестировщика: {str(e)}")
+            show_error(self.root, "Ошибка", f"Не удалось открыть тестировщика: {str(e)}")
 
     def show_strategy_selection(self):
         """Показывает отдельное окно выбора стратегий"""
@@ -135,7 +135,7 @@ class StrategySelectionWindow:
 
         self.root.configure(bg='#182030')
         self.root.transient(self.parent)
-        self.root.grab_set()
+        safe_grab_set(self.root)
 
         # Обработчик закрытия окна
         self.root.protocol("WM_DELETE_WINDOW", self.go_back)
@@ -346,7 +346,7 @@ class StrategySelectionWindow:
             tester_window.run()
         except Exception as e:
             print(f"Ошибка открытия тестировщика: {e}")
-            messagebox.showerror("Ошибка", f"Не удалось открыть тестировщик: {str(e)}")
+            show_error(self.root, "Ошибка", f"Не удалось открыть тестировщик: {str(e)}")
 
     def on_close(self):
         """Закрывает окно"""
@@ -378,7 +378,7 @@ class StrategySelectorWindow:
         """Настройка свойств окна"""
         self.root.configure(bg='#182030')
         self.root.transient(self.parent)
-        self.root.grab_set()
+        safe_grab_set(self.root)
 
     def setup_ui(self):
         """Настройка интерфейса"""
@@ -421,14 +421,14 @@ class StrategySelectorWindow:
         )
         ready_button.pack(pady=(0, 10))
 
-        # # Кнопка "Собрать свою стратегию"
-        # custom_button = create_hover_button(
-        #     main_frame,
-        #     text="Собрать свой пресет",
-        #     command=self.open_custom_strategy,
-        #     **button_style
-        # )
-        # custom_button.pack(pady=(0, 10))
+        # Кнопка "Собрать свою стратегию"
+        custom_button = create_hover_button(
+            main_frame,
+            text="Собрать свой пресет",
+            command=self.open_custom_strategy,
+            **button_style
+        )
+        custom_button.pack(pady=(0, 10))
 
         # Кнопка "Назад"
         back_button = create_hover_button(
