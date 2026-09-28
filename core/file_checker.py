@@ -49,7 +49,8 @@ class ZapretFileChecker:
 
             # UI компоненты
             self.manager_dir / "ui" / "windows" / "main_window.py",
-            self.manager_dir / "ui" / "windows" / "sudo_password_window.py",
+            self.manager_dir / "core" / "askpass.py",
+            self.manager_dir / "core" / "sudo_helper.py",
             self.manager_dir / "ui" / "components" / "custom_messagebox.py",
 
             # Файлы конфигурации
@@ -334,7 +335,10 @@ class ZapretFileChecker:
 
             # Извлекаем архив
             with tarfile.open(archive_path, 'r:gz') as tar:
-                tar.extractall(path=extract_dir)
+                try:
+                    tar.extractall(path=extract_dir, filter="data")
+                except TypeError:  # Python < 3.12
+                    tar.extractall(path=extract_dir)
 
             self.update_progress("Архив успешно извлечен", 60)
             return extract_dir
@@ -488,7 +492,8 @@ class ZapretFileChecker:
                     self.close_progress_window()
                     self.show_info("Ошибка скачивания",
                                  "Не удалось скачать архив с файлами.\n"
-                                 "Проверьте подключение к интернету.")
+                                 "Проверьте подключение к интернету; если релиз ещё не "
+                                 "опубликован, восстановление недоступно.")
                     return False
 
                 # 7. Извлекаем архив

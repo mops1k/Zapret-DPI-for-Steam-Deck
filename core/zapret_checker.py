@@ -12,6 +12,7 @@ from collections.abc import Callable
 from tkinter import messagebox
 
 from core.app_logging import get_error_logger
+from core.sudo_helper import run_sudo, sudo_available
 from core.dpi_utils import place_toplevel_centered_on_parent
 from core.zapret_updater import (
     ZapretUpdater,
@@ -240,67 +241,38 @@ class ZapretChecker:
             self.progress_window = None
 
     def get_sudo_password(self):
-        """Запрашивает sudo пароль у пользователя"""
-        if self._sudo_password_provider is not None:
-            try:
-                password = self._sudo_password_provider()
-                if password:
-                    self.sudo_password = password
-                    return True
-                return False
-            except Exception as e:
-                print(f"Ошибка при запросе пароля: {e}")
-                return False
-        try:
-            pwd = getpass.getpass("Пароль sudo: ")
-            if pwd:
-                self.sudo_password = pwd
-                return True
-            return False
-        except Exception as e:
-            print(f"Ошибка при запросе пароля: {e}")
+        """Совместимость: пароль вводит системный askpass при каждом `sudo -A`."""
+        if not sudo_available():
             self.show_info(
                 "Ошибка",
-                "Не удалось запросить пароль.\nУстановка Zapret невозможна.",
+                "sudo или askpass-хелпер (core/askpass.py) недоступны.\n"
+                "Установка Zapret невозможна.",
             )
             return False
+        return True
 
     def set_sudo_password(self, password):
-        """Сохраняет sudo пароль"""
-        self.sudo_password = password
+        """Оставлено для совместимости: пароль больше не хранится."""
+        return None
 
     def run_with_sudo(self, command, task_name=""):
-        """Выполняет команду с sudo паролем"""
-        if not self.sudo_password:
-            return None
-
+        """Выполняет команду через sudo -A (пароль спрашивает системный askpass)."""
         if task_name and self.progress_window:
             self.update_progress(task_name, self.get_current_progress())
 
-        try:
-            process = subprocess.Popen(
-                ['sudo', '-S'] + command,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-
-            stdout, stderr = process.communicate(input=self.sudo_password + '\n')
-
-            return {
-                'returncode': process.returncode,
-                'stdout': stdout,
-                'stderr': stderr
-            }
-
-        except Exception as e:
-            print(f"Ошибка выполнения команды с sudo: {e}")
+        if not sudo_available():
             return {
                 'returncode': -1,
                 'stdout': '',
-                'stderr': str(e)
+                'stderr': 'sudo или askpass-хелпер недоступны',
             }
+
+        code, stdout, stderr = run_sudo(command, timeout=300)
+        return {
+            'returncode': code,
+            'stdout': stdout,
+            'stderr': stderr,
+        }
 
     def get_current_progress(self):
         """Рассчитывает текущий прогресс на основе этапа"""
@@ -384,6 +356,19 @@ class ZapretChecker:
                 timeout=120.0,
                 reporthook=reporthook,
             )
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                detail = "архив обновления ещё не опубликован (HTTP 404)"
+            else:
+                detail = f"сервер вернул HTTP {e.code}"
+            self.log_debug(f"Ошибка скачивания полного пакета: {detail}")
+            get_error_logger().error(
+                "Установка Zapret: скачивание полного пакета %s: %s",
+                bundle_url,
+                detail,
+            )
+            self.last_install_error = detail
+            return False
         except urllib.error.URLError as e:
             reason = e.reason
             detail = str(reason) if reason is not None else str(e)
@@ -394,6 +379,7 @@ class ZapretChecker:
                 detail,
                 exc_info=True,
             )
+            self.last_install_error = f"сеть: {detail}"
             return False
         except Exception as e:
             self.log_debug(f"Ошибка скачивания полного пакета: {e}")
@@ -415,7 +401,10 @@ class ZapretChecker:
         self.update_progress("Распаковка полного пакета...", 35)
         try:
             with tarfile.open(archive_path, "r:gz") as tar:
-                tar.extractall(path=extract_dir)
+                try:
+                    tar.extractall(path=extract_dir, filter="data")
+                except TypeError:  # Python < 3.12
+                    tar.extractall(path=extract_dir)
         except Exception as e:
             self.log_debug(f"Ошибка распаковки полного пакета: {e}")
             get_error_logger().exception("Установка Zapret: распаковка полного пакета")
@@ -430,7 +419,7 @@ class ZapretChecker:
             return False
 
         zu = ZapretUpdater()
-        pwd = self.sudo_password
+        pwd = None  # пароль вводит системный askpass (sudo -A)
 
         def pc(msg, pct):
             if pct is not None:
@@ -511,10 +500,12 @@ class ZapretChecker:
                 )
                 self.lock_readonly_system()
                 self.close_progress_window()
+                hint = getattr(self, "last_install_error", "")
                 self.show_info(
                     "Ошибка установки",
                     "Не удалось установить службу Zapret из полного пакета.\n"
-                    "Проверьте подключение к интернету и попробуйте снова.",
+                    + (f"Причина: {hint}.\n" if hint else "")
+                    + "Проверьте подключение к интернету и попробуйте снова.",
                 )
                 return False
 

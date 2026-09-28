@@ -5,7 +5,7 @@ import threading
 import tkinter as tk
 from typing import Any, Protocol
 
-from core.dpi_utils import center_toplevel_on_parent, fit_toplevel_to_content
+from core.dpi_utils import center_toplevel_on_parent, fit_toplevel_to_content, safe_grab_set
 from core.github_release import sanitize_text_for_display
 from core.tk_scale_lab_helpers import (
     dampened_hi_dpi_factor,
@@ -205,7 +205,7 @@ def show_update_notification_dialog(
             except Exception:
                 pass
             if not loaded:
-                loaded = "Описание релиза недоступно (проверьте интернет)."
+                loaded = "Описание релиза недоступно (релиз ещё не опубликован или нет сети)."
             else:
                 stored = getattr(host, "_last_bundle_update_info", None)
                 if isinstance(stored, dict):
@@ -406,7 +406,7 @@ def show_update_notification_dialog(
     except tk.TclError:
         pass
 
-    notification_window.grab_set()
+    safe_grab_set(notification_window)
 
     try:
         _poll_after_id[0] = notification_window.after(_POLL_MS, _poll_update_dpi_tick)
