@@ -116,7 +116,7 @@ def show_info_dialog(parent):
         webbrowser.open(available_site)
 
     def open_github_page(event):
-        webbrowser.open("https://github.com/mashakulina/Zapret-DPI-for-Steam-Deck")
+        webbrowser.open("https://github.com/mops1k/Zapret-DPI-for-Steam-Deck")
 
     # Функция для создания ссылки с разделенной иконкой и текстом
     def create_link_with_icon(parent, icon, text, command_func):

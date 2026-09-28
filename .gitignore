@@ -3,3 +3,4 @@ git-add-commit-loop.sh
 .dsh/tmp/
 __pycache__/
 *.pyc
+dist/

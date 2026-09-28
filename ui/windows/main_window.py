@@ -6,7 +6,6 @@ import tkinter as tk
 
 from core.service_manager import ServiceManager
 from ui.windows.main.main_chrome import MainChromeMixin
-from ui.windows.main.main_decky import MainDeckyMixin
 from ui.windows.main.main_gamefilter import MainGameFilterMixin
 from ui.windows.main.main_service import MainServiceMixin
 from ui.windows.main.main_startup import MainStartupMixin
@@ -23,7 +22,6 @@ class MainWindow(
     MainUIMixin,
     MainGameFilterMixin,
     MainServiceMixin,
-    MainDeckyMixin,
 ):
     """Главное окно: композиция миксинов из ui.windows.main."""
 
@@ -44,9 +42,6 @@ class MainWindow(
         # Путь к файлу gamefilter.enable
         home_dir = os.path.expanduser("~")
         self.game_filter_file = os.path.join(home_dir, "Zapret_DPI_Manager", "utils", "gamefilter.enable")
-
-        self.decky_plugin_path = os.path.join(home_dir, "homebrew", "plugins", "DeckyZapretDPI")
-        self.decky_plugin_installed = os.path.isdir(self.decky_plugin_path)
 
         self.setup_ui()
         self._apply_main_window_size()

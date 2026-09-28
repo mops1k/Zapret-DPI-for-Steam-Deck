@@ -238,7 +238,7 @@ class MainUILayoutMixin:
     def open_user_guide(self, event=None):
         """Открывает руководство пользователя в браузере"""
         import webbrowser
-        url = "https://github.com/mashakulina/Zapret-DPI-for-Steam-Deck/blob/main/docs/user-guide-zapret-dpi-manager-steam-deck-ru.md"
+        url = "https://github.com/mops1k/Zapret-DPI-for-Steam-Deck/blob/main/docs/user-guide-zapret-dpi-manager-steam-deck-ru.md"
 
         try:
             webbrowser.open(url)

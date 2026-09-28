@@ -1,0 +1,52 @@
+name: Build and Release
+
+# Релиз собирается из двух архивов, которые тянет менеджер:
+#   Zapret_DPI_Manager.tar.gz — установщик (install_zapret.sh) и полный пакет;
+#   zapret_updater.tar.gz     — автообновление (без пользовательских файлов).
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег релиза, например v2.7.8.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show version
+        run: head -n 1 version.txt
+
+      - name: Build release archives
+        run: |
+          chmod +x tools/build_release.sh
+          tools/build_release.sh
+
+      - name: Verify archives
+        run: |
+          tar tzf dist/Zapret_DPI_Manager.tar.gz | grep -q '^\./main.py$'
+          tar tzf dist/Zapret_DPI_Manager.tar.gz | grep -q '^\./zapret/bins/x86_64/nfqws$'
+          if tar tzf dist/zapret_updater.tar.gz | grep -qE 'config\.txt|_user\.txt'; then
+            echo "updater must not contain user files" >&2
+            exit 1
+          fi
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist/Zapret_DPI_Manager.tar.gz
+            dist/zapret_updater.tar.gz
+          generate_release_notes: true

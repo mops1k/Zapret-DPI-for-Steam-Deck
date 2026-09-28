@@ -3,6 +3,8 @@
 Служба Zapret DPI основывается на разработке https://github.com/ImMALWARE. Большое ему спасибо за создание!
 Стратегии и некоторые доработки берутся из версии Zapret для Windows от [Flowseal](https://github.com/Flowseal/zapret-discord-youtube)
 
+Проект развивается в форке [mops1k/Zapret-DPI-for-Steam-Deck](https://github.com/mops1k/Zapret-DPI-for-Steam-Deck): исходный репозиторий автора больше не обновляется, поэтому свежие стратегии, списки домен/IP, payload-бинарники и обновления службы выходят здесь.
+
 ## Назначение
 
 **Zapret DPI Manager 2.0** — это графическая оболочка для службы Zapret на Linux и SteamOS. Она нужна, чтобы обходить ограничения на уровне DPI (типичный сценарий — недоступность отдельных сайтов и сервисов у конкретного провайдера) **без ручного редактирования конфигов в терминале**: включение и перезапуск службы, выбор или подбор стратегии, списки доменов и IP, DNS и другие настройки собраны в одном окне.
@@ -12,7 +14,7 @@
 - **Простой старт** — управление службой и автозапуском с главного экрана, пароль sudo запрашивается только когда он действительно нужен (в том числе с опцией запоминания).
 - **Автоподбор стратегии** — программа может сама прогнать тесты по готовым стратегиям, выбрать наиболее удачную для вашей сети и применить её, а в списке готовых стратегий пометить подходящие **звёздочкой (⭐)**.
 - **Дополнительные инструменты** — hostlist и IPSet, свои DNS, разблокировка сервисов через hosts, проверка соединения с текущей стратегией, **Game Filter** (игровые пресеты и сужение правил по портам).
-- **Плагин Decky Loader** — управление обходом и сменой стратегий из игрового режима (см. раздел про плагин в [руководстве пользователя](docs/user-guide-zapret-dpi-manager-steam-deck-ru.md)).
+- **Актуальные данные обхода** — стратегии, списки доменов и IP, payload-бинарники и движок nfqws синхронизируются с актуальным набором Flowseal.
 
 Полное описание интерфейса и сценариев — в файле [docs/user-guide-zapret-dpi-manager-steam-deck-ru.md](docs/user-guide-zapret-dpi-manager-steam-deck-ru.md).
 
@@ -20,7 +22,7 @@
 ### SteamOS
 Для работы вам понадобится sudo пароль. Его можно установить через консоль командой `passwd`
 
-1. Скачать ярлык [Zepret_Manager_V2_Install.desktop](https://github.com/mashakulina/Zapret-DPI-for-Steam-Deck/blob/main/Zepret_Manager_V2_Install.desktop) 
+1. Скачать ярлык [Zepret_Manager_V2_Install.desktop](https://github.com/mops1k/Zapret-DPI-for-Steam-Deck/blob/main/Zepret_Manager_V2_Install.desktop) 
 2. Запустить ярлык. Ярлык сам скачает установщик, распакует его и запустит
 3. Ввести sudo пароль, когда появится окно для ввода пароля
 4. Дождаться окончания установки
@@ -28,7 +30,7 @@
 ### Другие ОС
 Для работы вам понадобится sudo пароль. Его можно установить через консоль командой `passwd`
 
-1. Скачать архив установщика [install_zapret.tar.gz](https://github.com/mashakulina/Zapret-DPI-for-Steam-Deck/raw/refs/heads/main/install_zapret.tar.gz)
+1. Скачать архив установщика [install_zapret.tar.gz](https://github.com/mops1k/Zapret-DPI-for-Steam-Deck/raw/refs/heads/main/install_zapret.tar.gz)
 2. Распаковать в удобном месте
 3. Запустить install_zapret.sh и следовать шагам установщика
 

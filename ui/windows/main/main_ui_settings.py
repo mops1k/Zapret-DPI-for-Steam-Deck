@@ -54,10 +54,6 @@ class MainUISettingsMixin:
             'cursor': 'hand2'
         }
 
-        installed = self.is_decky_zapret_plugin_installed()
-        plugin_label = "Удалить плагин Zapret DPI" if installed else "Установить плагин Zapret DPI"
-        plugin_command = self.remove_decky_plugin if installed else self.install_decky_plugin
-
         # Кнопки меню
         menu_items = [
             ("Сменить стратегию", self.open_service_window),
@@ -66,7 +62,6 @@ class MainUISettingsMixin:
             ("Настройки IPSet", self.open_ipset_settings),
             ("Настройки DNS", self.open_dns_settings),
             ("Разблокировать сервисы", self.open_service_unlock),
-            (plugin_label, plugin_command),
             ("Обновить Zapret", self.open_update_settings),
             ("Удалить Zapret", self.uninstall_zapret)
         ]
