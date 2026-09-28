@@ -1,6 +1,6 @@
 /docs/ui_scaling.md
 git-add-commit-loop.sh
-.dsh/tmp/
+.dsh/
 __pycache__/
 *.pyc
 dist/
