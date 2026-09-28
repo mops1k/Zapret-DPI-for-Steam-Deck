@@ -1,13 +1,18 @@
-"""Настройка записи ошибок приложения в /tmp/zapterdpimanager.log."""
+"""Настройка записи ошибок приложения в ~/.local/state/zapret_dpi_manager."""
 
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import threading
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-LOG_FILE_PATH = Path("/tmp/zapterdpimanager.log")
+LOG_DIR = Path(
+    os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))
+) / "zapret_dpi_manager"
+LOG_FILE_PATH = LOG_DIR / "error.log"
 _LOGGER_NAME = "zapret_dpi_manager.error"
 
 _setup_done = False
@@ -29,7 +34,14 @@ def setup_error_logging() -> None:
     log.propagate = False
 
     if not log.handlers:
-        handler = logging.FileHandler(LOG_FILE_PATH, encoding="utf-8")
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(LOG_DIR, 0o700)
+        except OSError:
+            pass
+        handler = RotatingFileHandler(
+            LOG_FILE_PATH, maxBytes=1_000_000, backupCount=3, encoding="utf-8"
+        )
         handler.setLevel(logging.ERROR)
         handler.setFormatter(
             logging.Formatter(
@@ -38,6 +50,10 @@ def setup_error_logging() -> None:
             )
         )
         log.addHandler(handler)
+        try:
+            os.chmod(LOG_FILE_PATH, 0o600)
+        except OSError:
+            pass
 
     _orig_sys_excepthook = sys.excepthook
 

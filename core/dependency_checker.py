@@ -14,10 +14,12 @@ from core.platform_info import (
     is_valve_steamos,
     distro_log_label,
     os_release_id_normalized,
+    detect_fwtype,
     detect_package_backend,
     dependency_package_name,
     install_command_for_package,
 )
+from core.sudo_helper import run_sudo, sudo_available
 
 class DependencyChecker:
     def __init__(
@@ -30,7 +32,9 @@ class DependencyChecker:
         self.root = root_window
         self._show_info_fn = show_info_fn
         self._sudo_password_provider = sudo_password_provider
-        self.dependencies = ['curl', 'nft']
+        # Зависимости зависят от бэкенда файрвола (единый источник — detect_fwtype).
+        fw_package = "nft" if detect_fwtype() == "nftables" else "iptables"
+        self.dependencies = ['curl', fw_package]
         self.sudo_password = None
         self.progress_window = None
         self.current_task = ""
@@ -202,88 +206,53 @@ class DependencyChecker:
             self.log_debug("Окно прогресса уже закрыто")
 
     def get_sudo_password(self):
-        """Запрашивает sudo пароль у пользователя"""
-        self.log_debug("Запрос sudo пароля...")
-        if self._sudo_password_provider is not None:
-            try:
-                password = self._sudo_password_provider()
-                if password:
-                    self.sudo_password = password
-                    self.log_debug("Sudo пароль получен (длина: {})".format(len(password)))
-                    return True
-                self.log_debug("Пользователь отменил ввод пароля")
-                return False
-            except Exception as e:
-                self.log_debug(f"Ошибка при запросе пароля: {e}")
-                return False
-        try:
-            import getpass
-
-            pwd = getpass.getpass("Пароль sudo: ")
-            if pwd:
-                self.sudo_password = pwd
-                return True
-            return False
-        except Exception as e:
-            self.log_debug(f"Ошибка при запросе пароля: {e}")
+        """Совместимость: пароль вводит системный askpass при каждом `sudo -A`."""
+        self.log_debug("Проверка доступности sudo -A (askpass)...")
+        if not sudo_available():
+            self.log_debug("sudo или askpass-хелпер недоступны")
             self.show_info(
                 "Ошибка",
-                "Не удалось запросить пароль.\nУстановка зависимостей невозможна.",
+                "sudo или askpass-хелпер (core/askpass.py) недоступны.\n"
+                "Установка зависимостей невозможна.",
             )
             return False
+        return True
 
     def set_sudo_password(self, password):
-        """Сохраняет sudo пароль"""
-        self.sudo_password = password
-        self.log_debug("Sudo пароль установлен")
+        """Оставлено для совместимости: пароль больше не хранится."""
+        return None
 
     def run_with_sudo(self, command, task_name=""):
-        """Выполняет команду с sudo паролем"""
-        if not self.sudo_password:
-            self.log_debug(f"Нет sudo пароля для команды: {' '.join(command)}")
-            return None
-
+        """Выполняет команду через sudo -A (пароль спрашивает системный askpass)."""
         # Обновляем задачу если есть окно прогресса
         if task_name and self.progress_window:
             self.update_progress(task_name, self.get_current_progress())
 
         self.log_debug(f"Выполнение команды: sudo {' '.join(command)}")
 
-        try:
-            process = subprocess.Popen(
-                ['sudo', '-S'] + command,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-
-            stdout, stderr = process.communicate(input=self.sudo_password + '\n')
-
-            self.log_debug(f"Результат команды: код={process.returncode}")
-            if stdout:
-                self.log_debug(f"stdout: {stdout[:200]}...")
-            if stderr:
-                self.log_debug(f"stderr: {stderr[:200]}...")
-
-            self.last_command_result = {
-                'returncode': process.returncode,
-                'stdout': stdout,
-                'stderr': stderr,
-                'command': ' '.join(command)
-            }
-
-            return self.last_command_result
-
-        except Exception as e:
-            self.log_debug(f"Ошибка выполнения команды с sudo: {e}")
+        if not sudo_available():
             self.last_command_result = {
                 'returncode': -1,
                 'stdout': '',
-                'stderr': str(e),
-                'command': ' '.join(command)
+                'stderr': 'sudo или askpass-хелпер недоступны',
+                'command': ' '.join(command),
             }
             return self.last_command_result
+
+        code, stdout, stderr = run_sudo(command, timeout=300)
+        self.log_debug(f"Результат команды: код={code}")
+        if stdout:
+            self.log_debug(f"stdout: {stdout[:200]}...")
+        if stderr:
+            self.log_debug(f"stderr: {stderr[:200]}...")
+
+        self.last_command_result = {
+            'returncode': code,
+            'stdout': stdout,
+            'stderr': stderr,
+            'command': ' '.join(command),
+        }
+        return self.last_command_result
 
     def get_current_progress(self):
         """Рассчитывает текущий прогресс на основе этапа"""
@@ -397,62 +366,6 @@ class DependencyChecker:
 
         self.log_debug("Система успешно заблокирована")
         return True
-
-    def fix_pacman_conf(self):
-        """Модифицирует pacman.conf (для всех ОС, использующих pacman)"""
-        self.current_task = "pacman"
-        self.log_debug("Модификация pacman.conf...")
-
-        try:
-            # Проверяем существование файла
-            self.log_debug("Проверка существования /etc/pacman.conf")
-            check_result = self.run_with_sudo(['ls', '-la', '/etc/pacman.conf'])
-
-            if check_result and check_result['returncode'] == 0:
-                self.log_debug(f"Файл pacman.conf существует: {check_result['stdout']}")
-            else:
-                self.log_debug("Файл pacman.conf не найден, возможно используется другой пакетный менеджер")
-                return True  # Возвращаем True, если pacman не используется
-
-            # Резервная копия
-            self.log_debug("Создание резервной копии pacman.conf...")
-            result = self.run_with_sudo(
-                ['cp', '/etc/pacman.conf', '/etc/pacman.conf.backup'],
-                "Создание резервной копии pacman.conf..."
-            )
-
-            if not result or result['returncode'] != 0:
-                self.log_debug(f"Ошибка создания резервной копии: {result['stderr'] if result else 'No result'}")
-                return False
-
-            # Модификация
-            self.log_debug("Модификация pacman.conf...")
-            result = self.run_with_sudo([
-                'sed', '-i',
-                's/Required DatabaseOptional/TrustAll/g',
-                '/etc/pacman.conf'
-            ], "Модификация pacman.conf...")
-
-            if not result or result['returncode'] != 0:
-                self.log_debug(f"Не удалось модифицировать pacman.conf: {result['stderr'] if result else 'No result'}")
-                return False
-
-            # Проверяем изменения
-            self.log_debug("Проверка изменений в pacman.conf...")
-            check_changes = self.run_with_sudo(['grep', '-n', 'TrustAll', '/etc/pacman.conf'])
-            if check_changes and check_changes['returncode'] == 0:
-                self.log_debug(f"Изменения применены: {check_changes['stdout']}")
-            else:
-                self.log_debug("Изменения не найдены в файле")
-
-            self.log_debug("pacman.conf успешно модифицирован")
-            return True
-
-        except Exception as e:
-            self.log_debug(f"Ошибка модификации pacman.conf: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
 
     def init_pacman_keys(self):
         """Инициализирует ключи pacman (для всех ОС, использующих pacman)"""
@@ -812,19 +725,9 @@ class DependencyChecker:
                                  "Программа может работать некорректно.")
                     return False
 
-            # 5. Модифицируем pacman.conf (для всех ОС)
-            self.log_debug("Шаг 2: Модификация pacman.conf...")
-            if not self.fix_pacman_conf():
-                self.log_debug("Ошибка модификации pacman.conf")
-                # Если это SteamOS, пытаемся заблокировать систему перед выходом
-                if self.is_steamos:
-                    self.lock_readonly_system()
-                if self.progress_window:
-                    self.close_progress_window()
-                self.show_info("Проблема с настройкой",
-                             "Не удалось настроить пакетный менеджер.\n"
-                             "Установка зависимостей невозможна.")
-                return False
+            # 5. pacman.conf НЕ модифицируем: замена SigLevel на TrustAll ослабляет
+            # проверку подписей для всей системы, а зависимостям она не нужна.
+            self.log_debug("Шаг 2: Модификация pacman.conf пропущена (намеренно)")
 
             # 6. Удаляем блокировочные файлы базы данных pacman (только для SteamOS)
             if self.is_steamos:

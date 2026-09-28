@@ -2,62 +2,51 @@ import subprocess
 import time
 
 from core.app_logging import get_error_logger
+from core.sudo_helper import run_sudo, sudo_available
 
 
 class ServiceManager:
-    def __init__(self, sudo_password=None):
-        self.sudo_password = sudo_password
+    """Управление systemd-службой zapret.
 
-    def set_sudo_password(self, password):
-        """Устанавливает пароль sudo"""
-        self.sudo_password = password
+    Пароль sudo вводится системным askpass-хелпером (`sudo -A`), приложение
+    пароль не хранит и не передаёт.
+    """
 
-    def _run_sudo_command(self, command):
-        """Выполняет команду с sudo"""
-        if not self.sudo_password:
-            return False, "Пароль sudo не установлен"
+    def _run_sudo(self, argv, timeout=30):
+        """Выполняет команду через sudo -A. Возвращает (ok, вывод или ошибка)."""
+        if not sudo_available():
+            return False, "sudo или askpass-хелпер недоступны"
+        code, out, err = run_sudo(argv, timeout=timeout)
+        if code == 0:
+            return True, (out or "").strip()
+        parts = [p.strip() for p in (err, out) if (p or "").strip()]
+        merged = "\n".join(parts) if parts else f"(код выхода {code}, вывод пуст)"
+        return False, merged
 
+    @staticmethod
+    def _run(argv, timeout=5):
+        """Выполняет команду без sudo (чтение статуса)."""
         try:
-            # Формируем команду с передачей пароля
-            cmd = f"echo '{self.sudo_password}' | sudo -S {command}"
-
-            process = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-
-            if process.returncode == 0:
-                return True, process.stdout.strip()
-            else:
-                err_parts = []
-                if (process.stderr or "").strip():
-                    err_parts.append(process.stderr.strip())
-                if (process.stdout or "").strip():
-                    err_parts.append(process.stdout.strip())
-                merged = "\n".join(err_parts)
-                if not merged:
-                    merged = f"(код выхода {process.returncode}, вывод пуст)"
-                return False, merged
-
+            proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
             return False, "Таймаут выполнения команды"
-        except Exception as e:
+        except OSError as e:
             return False, str(e)
+        if proc.returncode == 0:
+            return True, (proc.stdout or "").strip()
+        return False, (proc.stderr or proc.stdout or "").strip()
 
     def _collect_zapret_failure_context(self, max_chars=12000):
-        """Текст из systemctl status и journalctl (как в journal), для диагностики конфига."""
+        """systemctl status и journalctl для диагностики конфига."""
         chunks = []
-        for cmd in (
-            "systemctl status zapret --no-pager -l",
-            "journalctl -u zapret.service -n 50 --no-pager",
+        for argv in (
+            ["systemctl", "status", "zapret", "--no-pager", "-l"],
+            ["journalctl", "-u", "zapret.service", "-n", "50", "--no-pager"],
         ):
-            _ok, out = self._run_sudo_command(cmd)
+            _ok, out = self._run_sudo(argv, timeout=15)
             text = (out or "").strip()
             if text:
-                chunks.append(f"$ {cmd}\n{text}")
+                chunks.append(f"$ {' '.join(argv)}\n{text}")
         result = "\n\n".join(chunks)
         if len(result) > max_chars:
             result = result[: max_chars - 24] + "\n… [фрагмент усечён]"
@@ -68,41 +57,26 @@ class ServiceManager:
         last_state = ""
         last_rc = None
         for _ in range(24):
-            try:
-                proc = subprocess.run(
-                    ["systemctl", "is-active", "zapret"],
-                    capture_output=True,
-                    text=True,
-                    timeout=8,
-                )
-            except (subprocess.TimeoutExpired, OSError) as e:
-                ctx = self._collect_zapret_failure_context()
-                tail = f"ошибка systemctl is-active: {e}"
-                return False, f"{tail}\n\n{ctx}" if ctx else tail
-
-            last_state = (proc.stdout or "").strip()
-            last_rc = proc.returncode
-            if last_state == "active":
-                return True, last_state
-            if last_state == "activating":
+            ok, out = self._run(["systemctl", "is-active", "zapret"], timeout=8)
+            state = (out or "").strip()
+            last_state = state
+            last_rc = 0 if ok else 1
+            if state == "active":
+                return True, state
+            if state == "activating":
                 time.sleep(0.35)
                 continue
             break
 
         ctx = self._collect_zapret_failure_context()
-        head = (
-            f"служба не в состоянии active после запуска: {last_state!r} "
-            f"(код is-active: {last_rc})"
-        )
-        if (proc.stderr or "").strip():
-            head += f"; stderr is-active: {proc.stderr.strip()}"
+        head = f"служба не в состоянии active после запуска: {last_state!r} (код is-active: {last_rc})"
         full = f"{head}\n\n{ctx}" if ctx else head
         return False, full
 
     def _start_or_restart_zapret(self, op):
         """op: 'start' или 'restart'. Пишет подробности в лог при ошибке."""
         log = get_error_logger()
-        ok, msg = self._run_sudo_command(f"systemctl {op} zapret")
+        ok, msg = self._run_sudo(["systemctl", op, "zapret"], timeout=30)
         if not ok:
             ctx = self._collect_zapret_failure_context()
             full = (msg or "systemctl вернул ошибку").strip()
@@ -124,7 +98,7 @@ class ServiceManager:
 
     def stop_service(self):
         """Останавливает службу zapret"""
-        return self._run_sudo_command("systemctl stop zapret")
+        return self._run_sudo(["systemctl", "stop", "zapret"], timeout=30)
 
     def restart_service(self):
         """Перезапускает службу zapret"""
@@ -132,130 +106,44 @@ class ServiceManager:
 
     def enable_autostart(self):
         """Включает автозапуск службы zapret"""
-        return self._run_sudo_command("systemctl enable zapret")
+        return self._run_sudo(["systemctl", "enable", "zapret"], timeout=30)
 
     def disable_autostart(self):
         """Отключает автозапуск службы zapret"""
-        return self._run_sudo_command("systemctl disable zapret")
+        return self._run_sudo(["systemctl", "disable", "zapret"], timeout=30)
 
     def get_service_status(self):
-        """Получает статус службы zapret"""
-        success, output = self._run_sudo_command("systemctl is-active zapret")
-
-        if success:
-            status = output.strip()
-            if status in ["active", "inactive", "failed", "activating"]:
-                return status
-            else:
-                return "unknown"
-        else:
-            # Пробуем получить детальный статус
-            success, output = self._run_sudo_command("systemctl status zapret --no-pager | grep -E 'Active:|Loaded:'")
-            if success:
-                if "active (running)" in output.lower():
+        """Статус службы zapret (чтение, без sudo)."""
+        ok, out = self._run(["systemctl", "is-active", "zapret"], timeout=5)
+        status = (out or "").strip()
+        if status in ["active", "inactive", "failed", "activating", "deactivating"]:
+            return status
+        if not ok:
+            ok2, out2 = self._run_sudo(
+                ["systemctl", "status", "zapret", "--no-pager"], timeout=15
+            )
+            if ok2:
+                low = out2.lower()
+                if "active (running)" in low:
                     return "active"
-                elif "inactive (dead)" in output.lower():
+                if "inactive (dead)" in low:
                     return "inactive"
-                elif "failed" in output.lower():
+                if "failed" in low:
                     return "failed"
-            return "unknown"
+        return "unknown"
 
     def get_autostart_status(self):
-        """Проверяет, включен ли автозапуск без sudo"""
-        try:
-            # Пробуем получить статус без пароля
-            process = subprocess.run(
-                ["systemctl", "is-enabled", "zapret"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-
-            output = process.stdout.strip().lower()
-
-            if output == "enabled":
-                return True
-            elif output == "disabled":
-                return False
-            else:
-                # Пробуем другой способ
-                process = subprocess.run(
-                    ["systemctl", "list-unit-files", "zapret.service"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-
-                if "enabled" in process.stdout.lower():
-                    return True
-                return False
-
-        except subprocess.TimeoutExpired:
-            print("Таймаут проверки автозапуска")
+        """Проверяет, включён ли автозапуск (чтение, без sudo)."""
+        ok, out = self._run(["systemctl", "is-enabled", "zapret"], timeout=5)
+        value = (out or "").strip().lower()
+        if value == "enabled":
+            return True
+        if value == "disabled":
             return False
-        except Exception as e:
-            print(f"Ошибка проверки автозапуска: {e}")
-            return False
+        ok2, out2 = self._run(["systemctl", "list-unit-files", "zapret.service"], timeout=5)
+        return bool(ok2 and "enabled" in out2.lower())
 
     def check_service_exists(self):
-        """Проверяет, существует ли служба zapret"""
-        success, _ = self._run_sudo_command("systemctl list-unit-files | grep -w zapret.service")
-        return success
-
-    def get_service_status(self):
-        """Получает статус службы zapret без sudo"""
-        try:
-            # Пробуем получить статус без пароля (для чтения обычно не нужен sudo)
-            process = subprocess.run(
-                ["systemctl", "is-active", "zapret"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-
-            status = process.stdout.strip()
-
-            if status in ["active", "inactive", "failed", "activating", "deactivating"]:
-                return status
-            elif process.returncode == 0:
-                return status
-            else:
-                # Если команда вернула ошибку, пробуем получить детальный статус
-                process = subprocess.run(
-                    ["systemctl", "status", "zapret", "--no-pager"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-
-                output = process.stdout.lower()
-                if "active (running)" in output:
-                    return "active"
-                elif "inactive (dead)" in output:
-                    return "inactive"
-                elif "failed" in output:
-                    return "failed"
-                else:
-                    return "unknown"
-
-        except subprocess.TimeoutExpired:
-            print("Таймаут проверки статуса службы")
-            return "unknown"
-        except Exception as e:
-            print(f"Ошибка проверки статуса службы: {e}")
-            return "unknown"
-
-    def get_autostart_status(self):
-        """Проверяет, включен ли автозапуск"""
-        success, output = self._run_sudo_command("systemctl is-enabled zapret")
-
-        if success:
-            return output.strip() == "enabled"
-        elif "disabled" in output.lower():
-            return False
-        else:
-            # Если команда вернула ошибку, проверяем через list-unit-files
-            success, output = self._run_sudo_command("systemctl list-unit-files zapret.service | grep zapret")
-            if success:
-                return "enabled" in output
-            return False
+        """Проверяет, существует ли юнит zapret.service."""
+        ok, out = self._run(["systemctl", "list-unit-files", "zapret.service"], timeout=5)
+        return bool(ok and "zapret.service" in out)

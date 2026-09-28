@@ -22,6 +22,7 @@ from core.platform_info import (
     ZAPRET_SYSTEMD_UNIT_PATH_LEGACY,
     zapret_systemd_unit_is_present,
 )
+from core.sudo_helper import run_sudo, sudo_available
 
 class ZapretUninstaller:
     def __init__(
@@ -196,81 +197,51 @@ class ZapretUninstaller:
             self.log_debug("Окно прогресса уже закрыто")
 
     def get_sudo_password(self):
-        """Запрашивает sudo пароль у пользователя"""
-        self.log_debug("Запрос sudo пароля...")
-        try:
-            from ui.windows.sudo_password_window import SudoPasswordWindow
-            password_window = SudoPasswordWindow(
-                self.root,
-                on_password_valid=lambda pwd: self.set_sudo_password(pwd)
+        """Совместимость: пароль вводит системный askpass при каждом `sudo -A`."""
+        self.log_debug("Проверка доступности sudo -A (askpass)...")
+        if not sudo_available():
+            self.log_debug("sudo или askpass-хелпер недоступны")
+            self.show_info(
+                "Ошибка",
+                "sudo или askpass-хелпер (core/askpass.py) недоступны.\n"
+                "Удаление Zapret невозможно.",
             )
-            password = password_window.run()
-
-            if password:
-                self.sudo_password = password
-                self.log_debug("Sudo пароль получен (длина: {})".format(len(password)))
-                return True
-            else:
-                self.log_debug("Пользователь отменил ввод пароля")
-                return False
-
-        except ImportError as e:
-            self.log_debug(f"Ошибка импорта SudoPasswordWindow: {e}")
-            self.show_info("Ошибка",
-                         "Не удалось загрузить модуль запроса пароля.\nУдаление Zapret невозможно.")
             return False
-        except Exception as e:
-            self.log_debug(f"Ошибка при запросе пароля: {e}")
-            return False
+        return True
 
     def set_sudo_password(self, password):
-        """Сохраняет sudo пароль"""
-        self.sudo_password = password
+        """Оставлено для совместимости: пароль больше не хранится."""
+        return None
 
     def run_with_sudo(self, command, task_name=""):
-        """Выполняет команду с sudo паролем"""
-        if not self.sudo_password:
-            self.log_debug(f"Нет sudo пароля для команды: {' '.join(command)}")
-            return None
-
+        """Выполняет команду через sudo -A (пароль спрашивает системный askpass)."""
         # Обновляем задачу если есть окно прогресса
         if task_name and self.progress_window:
             self.update_progress(task_name, self.get_current_progress())
 
         self.log_debug(f"Выполнение команды: sudo {' '.join(command)}")
 
-        try:
-            process = subprocess.Popen(
-                ['sudo', '-S'] + command,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-
-            stdout, stderr = process.communicate(input=self.sudo_password + '\n')
-
-            self.log_debug(f"Результат команды: код={process.returncode}")
-            if stdout:
-                self.log_debug(f"stdout: {stdout[:200]}...")
-            if stderr:
-                self.log_debug(f"stderr: {stderr[:200]}...")
-
-            return {
-                'returncode': process.returncode,
-                'stdout': stdout,
-                'stderr': stderr,
-                'command': ' '.join(command)
-            }
-
-        except Exception as e:
-            self.log_debug(f"Ошибка выполнения команды с sudo: {e}")
+        if not sudo_available():
             return {
                 'returncode': -1,
                 'stdout': '',
-                'stderr': str(e),
-                'command': ' '.join(command)
+                'stderr': 'sudo или askpass-хелпер недоступны',
+                'command': ' '.join(command),
             }
+
+        code, stdout, stderr = run_sudo(command, timeout=300)
+        self.log_debug(f"Результат команды: код={code}")
+        if stdout:
+            self.log_debug(f"stdout: {stdout[:200]}...")
+        if stderr:
+            self.log_debug(f"stderr: {stderr[:200]}...")
+
+        return {
+            'returncode': code,
+            'stdout': stdout,
+            'stderr': stderr,
+            'command': ' '.join(command),
+        }
 
     def get_current_progress(self):
         """Рассчитывает текущий прогресс на основе этапа"""
@@ -493,16 +464,7 @@ class ZapretUninstaller:
         self.log_debug("Восстановление pacman.conf...")
 
         try:
-            # Восстанавливаем оригинальную строку в pacman.conf
-            result = self.run_with_sudo(
-                ['sed', '-i', 's/TrustAll/Required DatabaseOptional/g', '/etc/pacman.conf'],
-                "Восстановление pacman.conf..."
-            )
-
-            if not result or result['returncode'] != 0:
-                self.log_debug(f"Предупреждение: Не удалось восстановить pacman.conf: {result['stderr'] if result else 'No result'}")
-                return False
-
+            # pacman.conf не трогаем: TrustAll мы больше не выставляем.
             # Инициализируем ключи
             self.log_debug("Инициализация ключей pacman...")
             init_result = self.run_with_sudo(['pacman-key', '--init'])

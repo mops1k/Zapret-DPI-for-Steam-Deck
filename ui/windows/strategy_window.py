@@ -1,11 +1,10 @@
 import tkinter as tk
 import os
-from tkinter import messagebox
+from ui.components.custom_messagebox import show_error, show_warning
 from ui.components.button_styler import create_hover_button
 from core.service_manager import ServiceManager
 from core.game_presets import reapply_active_preset_to_config
-from ui.windows.sudo_password_window import SudoPasswordWindow
-from core.dpi_utils import place_toplevel_centered_on_parent
+from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set
 from core.strategy_data import natural_sort_key
 
 class StrategyWindow:
@@ -75,7 +74,7 @@ class StrategyWindow:
         """Настройка свойств окна"""
         self.root.configure(bg='#182030')
         self.root.transient(self.parent)
-        self.root.grab_set()
+        safe_grab_set(self.root)
 
     def setup_ui(self):
         """Настройка интерфейса"""
@@ -329,19 +328,10 @@ class StrategyWindow:
             self._set_row_visual(strategy, selected=False)
 
     def ensure_sudo_password(self):
-        """Проверяет и получает пароль sudo если нужно"""
-        if not self.service_manager.sudo_password:
-            # Показываем окно ввода пароля
-            password_window = SudoPasswordWindow(
-                self.root,
-                on_password_valid=lambda pwd: self.service_manager.set_sudo_password(pwd)
-            )
-            password = password_window.run()
+        """Проверяет доступность sudo -A: пароль вводит системный askpass."""
+        from core.sudo_helper import sudo_available
 
-            if not password:
-                return False
-
-        return True
+        return sudo_available()
 
     def apply_strategy(self):
         """Применяет выбранную стратегию и перезапускает службу"""
@@ -357,7 +347,7 @@ class StrategyWindow:
 
         # Проверяем наличие пароля sudo
         if not self.ensure_sudo_password():
-            messagebox.showwarning("Отменено", "Для применения стратегии требуется пароль sudo")
+            show_warning(self.root, "Отменено", "Для применения стратегии требуется пароль sudo")
             return
 
         # Меняем состояние UI
@@ -377,7 +367,7 @@ class StrategyWindow:
             strategy_file = os.path.join(strategy_dir, self.selected_strategy)
 
             if not os.path.exists(strategy_file):
-                messagebox.showerror("Ошибка", f"Файл стратегии не найден: {self.selected_strategy}")
+                show_error(self.root, "Ошибка", f"Файл стратегии не найден: {self.selected_strategy}")
                 self.reset_ui_state()
                 return
 

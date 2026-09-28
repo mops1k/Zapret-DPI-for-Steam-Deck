@@ -4,7 +4,6 @@ import threading
 import tkinter as tk
 
 from core.app_logging import LOG_FILE_PATH
-from ui.windows.sudo_password_window import SudoPasswordWindow
 
 
 def _shorten_service_error_message(message: str, limit: int = 700) -> str:
@@ -74,38 +73,18 @@ class MainServiceMixin:
             # Обновляем статус службы через 1 секунду
             self.root.after(1000, self.check_service_status)
     def ensure_sudo_password(self):
-        """Проверяет и получает пароль sudo если нужно"""
+        """Проверяет доступность sudo -A: пароль вводит системный askpass."""
         if not self.service_manager:
             self.show_status_message("Менеджер службы не инициализирован", error=True)
             return False
 
-        if not self.service_manager.sudo_password:
-            # Убедимся, что окно действительно видимо
-            self.root.update_idletasks()
+        from core.sudo_helper import sudo_available
 
-            # Проверяем видимость окна
-            if not self.root.winfo_viewable():
-                self.root.deiconify()  # Делаем окно видимым
-                self.root.update_idletasks()
-
-            # Даем время на отрисовку
-            self.root.update()
-
-            # Маленькая задержка чтобы окно стало видимым
-            import time
-            time.sleep(0.1)
-
-            # Показываем окно ввода пароля
-            password_window = SudoPasswordWindow(
-                self.root,
-                on_password_valid=lambda pwd: self.service_manager.set_sudo_password(pwd)
+        if not sudo_available():
+            self.show_status_message(
+                "sudo или askpass-хелпер (core/askpass.py) недоступны", error=True
             )
-            password = password_window.run()
-
-            if not password:
-                self.show_status_message("Требуется пароль sudo", warning=True)
-                return False
-
+            return False
         return True
 
 

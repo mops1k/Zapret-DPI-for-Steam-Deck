@@ -3,8 +3,7 @@ import os
 from ui.components.button_styler import create_hover_button
 from core.strategy_data import STRATEGY_OPTIONS, save_strategy_names, load_strategy_names, get_strategy_command
 from core.service_manager import ServiceManager
-from ui.windows.sudo_password_window import SudoPasswordWindow
-from core.dpi_utils import place_toplevel_centered_on_parent
+from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set
 
 class CustomStrategyWindow:
     def __init__(self, parent):
@@ -44,7 +43,7 @@ class CustomStrategyWindow:
         """Настройка свойств окна"""
         self.root.configure(bg='#182030')
         self.root.transient(self.parent)
-        self.root.grab_set()
+        safe_grab_set(self.root)
 
     def setup_ui(self):
         """Настройка интерфейса"""
@@ -332,25 +331,17 @@ class CustomStrategyWindow:
             print(f"Ошибка загрузки сохраненных стратегий: {e}")
 
     def ensure_sudo_password(self):
-        """Проверяет и получает пароль sudo если нужно"""
+        """Проверяет доступность sudo -A: пароль вводит системный askpass."""
         if not self.service_manager:
             return False
 
-        if not self.service_manager.sudo_password:
-            # Показываем окно ввода пароля
-            if SudoPasswordWindow:
-                password_window = SudoPasswordWindow(
-                    self.root,
-                    on_password_valid=lambda pwd: self.service_manager.set_sudo_password(pwd)
-                )
-                password = password_window.run()
+        from core.sudo_helper import sudo_available
 
-                if not password:
-                    return False
-            else:
-                self.status_label.config(text="Модуль запроса пароля не найден", fg=self.error_color)
-                return False
-
+        if not sudo_available():
+            self.status_label.config(
+                text="sudo или askpass-хелпер недоступны", fg=self.error_color
+            )
+            return False
         return True
 
     def restart_service(self):
