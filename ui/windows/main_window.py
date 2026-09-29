@@ -39,6 +39,11 @@ class MainWindow(
 
         self.service_manager = ServiceManager()
 
+        # Всплывающие подсказки инициализируем ДО setup_ui(): обработчики
+        # наведения обращаются к этим атрибутам.
+        self.status_tooltip = None
+        self.game_filter_tooltip = None
+
         # Путь к файлу gamefilter.enable
         home_dir = os.path.expanduser("~")
         self.game_filter_file = os.path.join(home_dir, "Zapret_DPI_Manager", "utils", "gamefilter.enable")
@@ -57,7 +62,6 @@ class MainWindow(
         self.check_service_status()  # Проверяем статус службы при запуске
         self.update_game_filter_indicator()  # GameFilter / активный пресет игры (маркер в utils)
         self.schedule_status_update()  # Запускаем периодическую проверку
-        self.status_tooltip = None  # Всплывающее окошко для статуса
         self.root.after(100, self.check_updates_on_startup)
 
         # Bind событий фокус

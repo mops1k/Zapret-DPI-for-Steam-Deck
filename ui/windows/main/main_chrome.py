@@ -21,8 +21,10 @@ class MainChromeMixin:
             manager_dir = os.path.expanduser("~/Zapret_DPI_Manager")
             icon_path = os.path.join(manager_dir, "ico/zapret.png")
             if os.path.exists(icon_path):
-                # Для PNG файлов в tkinter
+                # Для PNG файлов в tkinter; ссылку сохраняем, иначе сборщик мусора
+                # уничтожит изображение и иконка исчезнет.
                 icon = tk.PhotoImage(file=icon_path)
+                self._icon_image = icon
                 self.root.iconphoto(True, icon)
         except Exception as e:
             print(f"Не удалось установить иконку: {e}")

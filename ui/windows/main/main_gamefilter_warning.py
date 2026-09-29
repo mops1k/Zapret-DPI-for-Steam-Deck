@@ -69,20 +69,8 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
                     return True
 
             # Проверяем переменные окружения
-            if 'DECK' in os.path.environ.get('XDG_SESSION_DESKTOP', '').upper():
+            if 'DECK' in os.environ.get('XDG_SESSION_DESKTOP', '').upper():
                 return True
-
-            # Проверяем разрешение экрана (Steam Deck: 1280x800 или 1280x720)
-            try:
-                screen_width = warning_window.winfo_screenwidth()
-                screen_height = warning_window.winfo_screenheight()
-
-                # Обычное разрешение Steam Deck
-                if (screen_width == 1280 and screen_height == 800) or \
-                   (screen_width == 1280 and screen_height == 720):
-                    return True
-            except Exception:
-                pass
 
             return False
         except Exception:
@@ -112,7 +100,7 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
     if on_steamdeck:
         # Целевые минимумы; итоговый размер и позиция — после сборки UI (fit + центр по главному окну)
         width = min(base_width - 60, screen_width - 80)
-        height = min(base_height - 60, screen_height - 80)
+        min(base_height - 60, screen_height - 80)
 
         # Делаем более читаемым для Steam Deck
         font_title = ("Arial", 14, "bold")
@@ -128,7 +116,6 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
     else:
         # На обычных системах
         width = base_width
-        height = base_height
         font_title = ("Arial", 16, "bold")
         font_warning = ("Arial", 12)
         font_problems = ("Arial", 10)

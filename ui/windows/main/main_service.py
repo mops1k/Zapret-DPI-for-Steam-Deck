@@ -13,13 +13,33 @@ def _shorten_service_error_message(message: str, limit: int = 700) -> str:
 
 
 class MainServiceMixin:
+    def _safe_after(self, func, delay=0):
+        """Планирует вызов в главном потоке, не падая на уничтоженном окне."""
+        try:
+            if self.root.winfo_exists():
+                self.root.after(delay, func)
+        except (tk.TclError, RuntimeError):
+            pass
+
+    def _begin_service_operation(self) -> bool:
+        """Единый флаг «операция со службой идёт» — защита от гонок restart/toggle."""
+        if getattr(self, "_service_busy", False):
+            self.show_status_message("Операция со службой уже выполняется", warning=True)
+            return False
+        self._service_busy = True
+        return True
+
+    def _end_service_operation(self):
+        self._service_busy = False
+
     def restart_zapret_service_properly(self, event=None):
         """Правильный перезапуск службы - использует тот же механизм что и другие кнопки"""
-        if self.restarting:
+        if not self._begin_service_operation():
             return
 
         # 1. Проверяем пароль ЧЕРЕЗ ensure_sudo_password (как другие кнопки)
         if not self.ensure_sudo_password():
+            self._end_service_operation()
             return  # Если пароль не получен - выходим
 
         # 2. Запускаем перезапуск
@@ -47,6 +67,7 @@ class MainServiceMixin:
             print(f"Ошибка при запуске перезапуска: {e}")
             self.show_status_message(f"Ошибка: {str(e)}", error=True)
             self.restarting = False
+            self._end_service_operation()
             self.restart_icon.config(state=tk.NORMAL)
 
     def _restart_zapret_thread(self):
@@ -56,22 +77,23 @@ class MainServiceMixin:
             success, message = self.service_manager.restart_service()
 
             if success:
-                self.root.after(0, lambda: self.show_status_message(
+                self._safe_after(lambda: self.show_status_message(
                     "Служба Zapret успешно перезапущена", success=True))
             else:
-                self.root.after(0, lambda m=message: self.show_status_message(
+                self._safe_after(lambda m=message: self.show_status_message(
                     f"Ошибка: {_shorten_service_error_message(m)}", error=True))
 
         except Exception as e:
-            self.root.after(0, lambda: self.show_status_message(
-                f"Ошибка перезапуска службы: {e}", error=True))
+            self._safe_after(lambda m=str(e): self.show_status_message(
+                f"Ошибка перезапуска службы: {m}", error=True))
         finally:
             # Восстанавливаем UI
-            self.root.after(0, lambda: self.restart_icon.config(state=tk.NORMAL))
+            self._safe_after(lambda: self.restart_icon.config(state=tk.NORMAL))
             self.restarting = False
+            self._end_service_operation()
 
             # Обновляем статус службы через 1 секунду
-            self.root.after(1000, self.check_service_status)
+            self._safe_after(self.check_service_status, 1000)
     def ensure_sudo_password(self):
         """Проверяет доступность sudo -A: пароль вводит системный askpass."""
         if not self.service_manager:
@@ -95,7 +117,8 @@ class MainServiceMixin:
             result = subprocess.run(
                 ["systemctl", "is-active", "zapret"],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=5,
             )
 
             status_output = result.stdout.strip()
@@ -104,21 +127,21 @@ class MainServiceMixin:
                 # Служба активна
                 self.service_running = True
                 self.status_indicator.config(text="⬤", fg='#30d158')  # Зеленый круг
-                self.zapret_button.config(text="Остановить Zapret DPI")
-            elif result.returncode == 3 and status_output == "inactive":
-                # Служба неактивна
+            elif result.returncode in (3, 4) or status_output in ("inactive", "unknown"):
+                # Служба неактивна или не существует
                 self.service_running = False
                 self.status_indicator.config(text="⬤", fg='#ff3b30')  # Красный круг
-                self.zapret_button.config(text="Запустить Zapret DPI")
-            elif result.returncode == 4:  # Код возврата 4 означает "неактивен" или "не существует"
-                self.service_running = False
-                self.status_indicator.config(text="⬤", fg='#ff3b30')  # Красный круг
-                self.zapret_button.config(text="Запустить Zapret DPI")
             else:
                 # Неизвестный статус
                 self.service_running = False
                 self.status_indicator.config(text="⬤", fg='#ff9500')  # Оранжевый круг
-                self.zapret_button.config(text="Запустить Zapret DPI")
+
+            # Текст кнопки не переписываем, пока идёт операция пользователя,
+            # иначе опрос каждые 5 с инвертирует действие (start/stop).
+            if not getattr(self, "_service_busy", False):
+                self.zapret_button.config(
+                    text="Остановить Zapret DPI" if self.service_running else "Запустить Zapret DPI"
+                )
 
             # Теперь проверяем автозапуск ОТДЕЛЬНО
             self.check_autostart_status()
@@ -137,7 +160,8 @@ class MainServiceMixin:
             result = subprocess.run(
                 ["systemctl", "is-enabled", "zapret"],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=5,
             )
 
             # systemctl is-enabled возвращает:
@@ -148,25 +172,23 @@ class MainServiceMixin:
             if result.returncode == 0:
                 # Автозапуск включен
                 self.autostart_enabled = True
-                self.autostart_button.config(text="Отключить автозапуск")
-                # print("DEBUG: Автозапуск включен")
             elif result.returncode == 1:
                 # Автозапуск отключен
                 self.autostart_enabled = False
-                self.autostart_button.config(text="Включить автозапуск")
-                # print("DEBUG: Автозапуск отключен")
             else:
                 # Неизвестный статус (служба может не существовать)
                 self.autostart_enabled = False
-                self.autostart_button.config(text="Включить автозапуск")
-                # print(f"DEBUG: Статус автозапуска неизвестен, код возврата: {result.returncode}")
-                # print(f"DEBUG: Вывод: {result.stdout.strip()}")
-                # print(f"DEBUG: Ошибка: {result.stderr.strip()}")
+
+            if not getattr(self, "_service_busy", False):
+                self.autostart_button.config(
+                    text="Отключить автозапуск" if self.autostart_enabled else "Включить автозапуск"
+                )
 
         except Exception as e:
             print(f"Ошибка проверки автозапуска: {e}")
             self.autostart_enabled = False
-            self.autostart_button.config(text="Включить автозапуск")
+            if not getattr(self, "_service_busy", False):
+                self.autostart_button.config(text="Включить автозапуск")
 
     def schedule_status_update(self):
         """Периодически обновляет статус службы"""
@@ -175,7 +197,7 @@ class MainServiceMixin:
         except Exception as e:
             print(f"Ошибка при обновлении статуса: {e}")
         finally:
-            self.root.after(5000, self.schedule_status_update)  # Проверка каждые 5 секунд
+            self._safe_after(self.schedule_status_update, 5000)  # Проверка каждые 5 секунд
 
     def toggle_zapret(self):
         """Переключает состояние Zapret (запуск/остановка)"""
@@ -183,13 +205,20 @@ class MainServiceMixin:
             self.show_status_message("Менеджер службы не инициализирован", error=True)
             return
 
+        if not self._begin_service_operation():
+            return
+
         # Проверяем пароль sudo
         if not self.ensure_sudo_password():
+            self._end_service_operation()
             return
+
+        # Фиксируем намерение ДО потока: 5-секундный опрос не должен его переписать.
+        self._pending_service_action = "stop" if self.service_running else "start"
 
         # Меняем состояние UI
         self.zapret_button.config(state=tk.DISABLED)
-        if self.service_running:
+        if self._pending_service_action == "stop":
             self.zapret_button.config(text="Остановка...")
             self.show_status_message("Остановка службы...")
         else:
@@ -204,33 +233,37 @@ class MainServiceMixin:
 
     def _toggle_zapret_thread(self):
         """Поток для переключения состояния службы"""
+        action = getattr(self, "_pending_service_action", "start")
         try:
-            if self.service_running:
+            if action == "stop":
                 # Останавливаем службу
                 success, message = self.service_manager.stop_service()
                 if success:
-                    self.show_status_message("Служба остановлена", success=True)
+                    self._safe_after(lambda: self.show_status_message("Служба остановлена", success=True))
                 else:
-                    self.show_status_message(f"Ошибка остановки: {message}", error=True)
+                    self._safe_after(lambda m=message: self.show_status_message(
+                        f"Ошибка остановки: {m}", error=True))
             else:
                 # Запускаем службу
                 success, message = self.service_manager.start_service()
                 if success:
-                    self.show_status_message("Служба запущена", success=True)
+                    self._safe_after(lambda: self.show_status_message("Служба запущена", success=True))
                 else:
-                    self.show_status_message(
-                        f"Ошибка запуска: {_shorten_service_error_message(message)}",
+                    self._safe_after(lambda m=message: self.show_status_message(
+                        f"Ошибка запуска: {_shorten_service_error_message(m)}",
                         error=True,
-                    )
+                    ))
 
             # Обновляем статус после операции
-            self.root.after(1000, self.check_service_status)
+            self._safe_after(self.check_service_status, 1000)
 
         except Exception as e:
-            self.show_status_message(f"Ошибка: {str(e)}", error=True)
+            self._safe_after(lambda m=str(e): self.show_status_message(f"Ошибка: {m}", error=True))
         finally:
             # Восстанавливаем кнопку
-            self.root.after(100, lambda: self.zapret_button.config(state=tk.NORMAL))
+            self._pending_service_action = None
+            self._safe_after(lambda: self.zapret_button.config(state=tk.NORMAL), 100)
+            self._end_service_operation()
 
     def toggle_autostart(self):
         """Переключает автозапуск"""
@@ -238,16 +271,23 @@ class MainServiceMixin:
             self.show_status_message("Менеджер службы не инициализирован", error=True)
             return
 
+        if not self._begin_service_operation():
+            return
+
         # Сначала проверяем текущий статус
         self.check_autostart_status()
 
         # Проверяем пароль sudo
         if not self.ensure_sudo_password():
+            self._end_service_operation()
             return
+
+        # Фиксируем намерение до потока
+        self._pending_autostart_action = "disable" if self.autostart_enabled else "enable"
 
         # Меняем состояние UI
         self.autostart_button.config(state=tk.DISABLED)
-        if self.autostart_enabled:
+        if self._pending_autostart_action == "disable":
             self.autostart_button.config(text="Отключение...")
             self.show_status_message("Отключение автозапуска...")
         else:
@@ -262,40 +302,42 @@ class MainServiceMixin:
 
     def _toggle_autostart_thread(self):
         """Поток для переключения автозапуска"""
+        action = getattr(self, "_pending_autostart_action", "enable")
         try:
-            # Двойная проверка состояния перед выполнением
-            current_state = self.autostart_enabled
-
-            if current_state:
+            if action == "disable":
                 # Отключаем автозапуск
                 success, message = self.service_manager.disable_autostart()
                 if success:
-                    self.show_status_message("Автозапуск отключен", success=True)
+                    self._safe_after(lambda: self.show_status_message("Автозапуск отключен", success=True))
                     self.autostart_enabled = False
                 else:
-                    self.show_status_message(f"Ошибка отключения: {message}", error=True)
+                    self._safe_after(lambda m=message: self.show_status_message(
+                        f"Ошибка отключения: {m}", error=True))
             else:
                 # Включаем автозапуск
                 success, message = self.service_manager.enable_autostart()
                 if success:
-                    self.show_status_message("Автозапуск включен", success=True)
+                    self._safe_after(lambda: self.show_status_message("Автозапуск включен", success=True))
                     self.autostart_enabled = True
                 else:
-                    self.show_status_message(f"Ошибка включения: {message}", error=True)
+                    self._safe_after(lambda m=message: self.show_status_message(
+                        f"Ошибка включения: {m}", error=True))
 
             # Обновляем статус после операции
-            self.root.after(1000, self.check_autostart_status)
+            self._safe_after(self.check_autostart_status, 1000)
 
         except Exception as e:
-            self.show_status_message(f"Ошибка: {str(e)}", error=True)
+            self._safe_after(lambda m=str(e): self.show_status_message(f"Ошибка: {m}", error=True))
         finally:
             # Восстанавливаем кнопку и обновляем текст
-            self.root.after(100, lambda: self.autostart_button.config(state=tk.NORMAL))
-            self.root.after(100, self.check_autostart_status)  # Еще раз проверяем состояние
+            self._pending_autostart_action = None
+            self._safe_after(lambda: self.autostart_button.config(state=tk.NORMAL), 100)
+            self._safe_after(self.check_autostart_status, 150)
+            self._end_service_operation()
 
     def show_status_message(self, message, success=False, warning=False, error=False):
         """Показывает сообщение в статусной строке"""
-        self.root.after(0, lambda: self._update_status_message(message, success, warning, error))
+        self._safe_after(lambda: self._update_status_message(message, success, warning, error))
 
     def _update_status_message(self, message, success, warning, error):
         """Обновляет статусное сообщение в основном потоке"""
@@ -310,6 +352,26 @@ class MainServiceMixin:
         else:
             self.status_message.config(fg='#AAAAAA')  # Серый
 
-        # Автоматически очищаем сообщение через 3 секунды (кроме ошибок)
+        # Автоматически очищаем сообщение через 3 секунды (кроме ошибок).
+        # Предыдущий таймер отменяем, иначе старое сообщение стирает новое.
+        pending = getattr(self, "_status_clear_job", None)
+        if pending is not None:
+            try:
+                self.root.after_cancel(pending)
+            except (tk.TclError, ValueError):
+                pass
+            self._status_clear_job = None
+
         if message and not error:
-            self.root.after(3000, lambda: self.status_message.config(text=""))
+            def _clear_status():
+                self._status_clear_job = None
+                try:
+                    if self.root.winfo_exists():
+                        self.status_message.config(text="")
+                except tk.TclError:
+                    pass
+
+            try:
+                self._status_clear_job = self.root.after(3000, _clear_status)
+            except (tk.TclError, RuntimeError):
+                pass

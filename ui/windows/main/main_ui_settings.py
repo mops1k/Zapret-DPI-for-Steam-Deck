@@ -138,6 +138,7 @@ class MainUISettingsMixin:
 
     def open_service_window(self):
         """Открывает окно выбора типа стратегии"""
+        self.close_settings_menu()
         selector_window = StrategySelectorWindow(self.root)
         selector_window.run()
         # После закрытия окна обновляем отображение стратегии
@@ -163,6 +164,7 @@ class MainUISettingsMixin:
 
     def open_dns_settings(self):
         """Открывает окно настроек DNS"""
+        self.close_settings_menu()  # Закрываем меню
         dns_window = DNSSettingsWindow(self.root)
         dns_window.run()
 
@@ -174,6 +176,7 @@ class MainUISettingsMixin:
 
     def open_update_settings(self):
         """Открывает окно обновления Zapret"""
+        self.close_settings_menu()  # Закрываем меню
         show_update_window(self.root)
 
     def forget_sudo_password(self):

@@ -106,6 +106,7 @@ class MainGameFilterMixin:
         try:
             # Получаем текущее состояние
             was_enabled = self.is_game_filter_enabled()
+            had_preset = False
 
             if was_enabled:
                 # Удаляем файл (выключаем)
@@ -119,10 +120,6 @@ class MainGameFilterMixin:
                 had_preset = get_active_preset_id() is not None
                 clear_active_game_preset_disk(get_manager_dir())
                 if had_preset:
-                    self.show_status_message(
-                        "Активный пресет игры снят (несовместим с отдельным GameFilter)",
-                        warning=True,
-                    )
                     self.update_game_filter_indicator()
 
                 # Создаем файл (включаем)
@@ -132,7 +129,7 @@ class MainGameFilterMixin:
                     os.makedirs(directory, exist_ok=True)
 
                 # Создаем файл
-                with open(self.game_filter_file, 'w') as f:
+                with open(self.game_filter_file, 'w'):
                     pass  # Просто создаем пустой файл
 
                 mode = protocol_mode_for_enable or GAMEFILTER_PROTOCOL_BOTH
@@ -152,7 +149,9 @@ class MainGameFilterMixin:
                 self.hide_game_filter_tooltip()
                 self.show_game_filter_tooltip()
 
-            # Показываем сообщение о смене состояния
+            # Показываем одно сообщение: не перекрываем предупреждение о снятии пресета
+            if had_preset:
+                status_message = f"{status_message}; активный пресет игры снят"
             self.show_status_message(status_message, success=True)
 
             # Перезапускаем службу zapret
@@ -165,6 +164,9 @@ class MainGameFilterMixin:
 
     def _restart_zapret_service(self, status_message):
         """Перезапускает службу zapret после изменения Game Filter"""
+        if not self._begin_service_operation():
+            return
+
         # Блокируем UI
         self.game_filter_indicator.config(state=tk.DISABLED)
 
@@ -179,22 +181,23 @@ class MainGameFilterMixin:
                 success, message = self.service_manager.restart_service()
 
                 if success:
-                    self.root.after(0, lambda: self.show_status_message(
+                    self._safe_after(lambda: self.show_status_message(
                         f"{status_message}, служба перезапущена", success=True))
                 else:
-                    self.root.after(0, lambda: self.show_status_message(
-                        f"{status_message}, но служба не перезапущена: {message}", warning=True))
+                    self._safe_after(lambda m=message: self.show_status_message(
+                        f"{status_message}, но служба не перезапущена: {m}", warning=True))
 
             except Exception as e:
-                self.root.after(0, lambda: self.show_status_message(
-                    f"Ошибка перезапуска службы: {e}", error=True))
+                self._safe_after(lambda m=str(e): self.show_status_message(
+                    f"Ошибка перезапуска службы: {m}", error=True))
             finally:
                 # Восстанавливаем UI и обновляем индикатор
-                self.root.after(0, lambda: self.game_filter_indicator.config(state=tk.NORMAL))
-                self.root.after(0, self.update_game_filter_indicator)
+                self._safe_after(lambda: self.game_filter_indicator.config(state=tk.NORMAL))
+                self._safe_after(self.update_game_filter_indicator)
 
                 # Обновляем статус службы через 1 секунду
-                self.root.after(1000, self.check_service_status)
+                self._safe_after(self.check_service_status, 1000)
+                self._end_service_operation()
 
         # Запускаем в отдельном потоке
         thread = threading.Thread(target=restart_service_thread, daemon=True)
@@ -202,6 +205,9 @@ class MainGameFilterMixin:
 
     def restart_zapret_after_preset(self, status_message):
         """Перезапускает службу zapret после изменения пресета (без изменения иконки GameFilter)."""
+        if not self._begin_service_operation():
+            return
+
         self.show_status_message(f"{status_message}, перезапуск службы...")
         self.root.update()
 
@@ -209,16 +215,17 @@ class MainGameFilterMixin:
             try:
                 success, message = self.service_manager.restart_service()
                 if success:
-                    self.root.after(0, lambda: self.show_status_message(
+                    self._safe_after(lambda: self.show_status_message(
                         f"{status_message}, служба перезапущена", success=True))
                 else:
-                    self.root.after(0, lambda: self.show_status_message(
-                        f"{status_message}, но служба не перезапущена: {message}", warning=True))
+                    self._safe_after(lambda m=message: self.show_status_message(
+                        f"{status_message}, но служба не перезапущена: {m}", warning=True))
             except Exception as e:
-                self.root.after(0, lambda: self.show_status_message(
-                    f"Ошибка перезапуска службы: {e}", error=True))
+                self._safe_after(lambda m=str(e): self.show_status_message(
+                    f"Ошибка перезапуска службы: {m}", error=True))
             finally:
-                self.root.after(1000, self.check_service_status)
+                self._safe_after(self.check_service_status, 1000)
+                self._end_service_operation()
 
         thread = threading.Thread(target=restart_thread, daemon=True)
         thread.start()
