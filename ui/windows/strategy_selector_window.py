@@ -2,7 +2,7 @@ import tkinter as tk
 import os
 from ui.components.custom_messagebox import show_error
 from ui.components.button_styler import create_hover_button
-from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set
+from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set, wait_window_safely
 from core.strategy_data import natural_sort_key
 from ui.windows.strategy_window import StrategyWindow
 from ui.windows.custom_strategy_window import CustomStrategyWindow
@@ -109,7 +109,7 @@ class AutoSelectionWindow:
 
     def run(self):
         """Запускает окно"""
-        self.root.wait_window()
+        wait_window_safely(self.root)
 
 
 class StrategySelectionWindow:
@@ -359,7 +359,7 @@ class StrategySelectionWindow:
 
     def run(self):
         """Запускает окно"""
-        self.root.wait_window()
+        wait_window_safely(self.root)
 
 
 class StrategySelectorWindow:
@@ -465,4 +465,4 @@ class StrategySelectorWindow:
 
     def run(self):
         """Запускает окно"""
-        self.root.wait_window()
+        wait_window_safely(self.root)

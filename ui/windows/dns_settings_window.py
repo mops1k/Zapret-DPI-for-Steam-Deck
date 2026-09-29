@@ -5,7 +5,7 @@ import re
 from ui.components.custom_messagebox import show_info, show_error
 from ui.components.button_styler import create_hover_button
 from core.sudo_helper import run_sudo
-from core.dpi_utils import place_toplevel_centered_on_parent
+from core.dpi_utils import place_toplevel_centered_on_parent, wait_window_safely
 
 class DNSSettingsWindow:
     def __init__(self, parent):
@@ -847,4 +847,4 @@ class DNSSettingsWindow:
     def run(self):
         """Запускает окно настроек DNS"""
         self.create_window()
-        self.window.wait_window()
+        wait_window_safely(self.window)

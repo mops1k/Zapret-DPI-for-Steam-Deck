@@ -4,7 +4,7 @@ from ui.components.custom_messagebox import show_error, show_warning
 from ui.components.button_styler import create_hover_button
 from core.service_manager import ServiceManager
 from core.game_presets import reapply_active_preset_to_config
-from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set
+from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set, wait_window_safely
 from core.strategy_data import natural_sort_key
 
 class StrategyWindow:
@@ -459,4 +459,4 @@ class StrategyWindow:
 
     def run(self):
         """Запускает окно"""
-        self.root.wait_window()
+        wait_window_safely(self.root)

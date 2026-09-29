@@ -8,6 +8,7 @@ from core.dpi_utils import (
     application_tk_root,
     center_toplevel_on_parent_with_size,
     place_toplevel_centered_on_parent,
+    wait_window_safely,
 )
 from core.tk_scale_lab_helpers import logical_ui_scale, warning_dialog_scale
 
@@ -918,4 +919,4 @@ class HostlistSettingsWindow:
     def run(self):
         """Запускает окно настроек HOSTLIST"""
         self.create_window()
-        self.window.wait_window()
+        wait_window_safely(self.window)

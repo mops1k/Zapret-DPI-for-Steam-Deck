@@ -10,6 +10,7 @@ from core.dpi_utils import (
     geometry_resize_keep_position,
     place_toplevel_centered_on_parent,
     set_window_size_to_fit_content,
+    wait_window_safely,
 )
 from core.tk_scale_lab_helpers import logical_ui_scale, warning_dialog_scale
 
@@ -869,4 +870,4 @@ class ServiceUnlockWindow:
     def run(self):
         """Запускает окно разблокировки сервисов"""
         self.create_window()
-        self.window.wait_window()
+        wait_window_safely(self.window)

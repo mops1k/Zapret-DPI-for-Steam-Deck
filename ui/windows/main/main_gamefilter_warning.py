@@ -13,6 +13,7 @@ from core.dpi_utils import (
     center_toplevel_on_screen,
     safe_grab_set,
     set_window_size_to_fit_content,
+    wait_window_safely,
 )
 from core.game_filter_settings import normalize_game_filter_protocol_mode
 from core.tk_scale_lab_helpers import warning_dialog_scale
@@ -296,7 +297,6 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
     # ОБЯЗАТЕЛЬНО для SteamOS/Wayland
     warning_window.transient(host.root)  # Делаем окно дочерним
     safe_grab_set(warning_window)  # Делаем модальным
-
     warning_window.update_idletasks()
     warning_window.update()
 
@@ -359,4 +359,4 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
     warning_window.protocol("WM_DELETE_WINDOW", warning_window.destroy)
 
     # Ждем завершения окна
-    host.root.wait_window(warning_window)
+    wait_window_safely(warning_window, host.root)

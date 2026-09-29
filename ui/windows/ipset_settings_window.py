@@ -6,7 +6,7 @@ import re
 import os
 import shutil
 from ui.components.custom_messagebox import show_info
-from core.dpi_utils import application_tk_root, place_toplevel_centered_on_parent
+from core.dpi_utils import application_tk_root, place_toplevel_centered_on_parent, wait_window_safely
 from core.tk_scale_lab_helpers import logical_ui_scale, warning_dialog_scale
 
 
@@ -540,7 +540,7 @@ class IpsetSettingsWindow:
     def run(self):
         """Запускает окно добавления пользовательских IP-адресов"""
         self.create_window()
-        self.window.wait_window()
+        wait_window_safely(self.window)
 
 
 class IpsetFilterWindow:
@@ -901,7 +901,7 @@ class IpsetFilterWindow:
     def run(self):
         """Запускает окно настройки IPSet Filter"""
         self.create_window()
-        self.window.wait_window()
+        wait_window_safely(self.window)
 
 class IpsetMainWindow:
     """Главное окно выбора настроек IPSet"""
@@ -1001,4 +1001,4 @@ class IpsetMainWindow:
     def run(self):
         """Запускает главное окно выбора настроек IPSet"""
         self.create_window()
-        self.window.wait_window()
+        wait_window_safely(self.window)

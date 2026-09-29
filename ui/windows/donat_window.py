@@ -1,7 +1,7 @@
 import tkinter as tk
 import os
 from ui.components.button_styler import create_hover_button
-from core.dpi_utils import place_toplevel_centered_on_parent
+from core.dpi_utils import place_toplevel_centered_on_parent, wait_window_safely
 
 class DonationWindow:
     def __init__(self, parent):
@@ -172,4 +172,4 @@ class DonationWindow:
 
     def run(self):
         """Запускает окно"""
-        self.root.wait_window()
+        wait_window_safely(self.root)

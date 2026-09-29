@@ -2,7 +2,7 @@ import tkinter as tk
 from ui.components.button_styler import create_hover_button
 from core.strategy_data import STRATEGY_OPTIONS, save_strategy_names, load_strategy_names
 from core.service_manager import ServiceManager
-from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set
+from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set, wait_window_safely
 
 class CustomStrategyWindow:
     def __init__(self, parent):
@@ -464,4 +464,4 @@ class CustomStrategyWindow:
 
     def run(self):
         """Запускает окно"""
-        self.root.wait_window()
+        wait_window_safely(self.root)

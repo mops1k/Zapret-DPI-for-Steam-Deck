@@ -9,6 +9,7 @@ from core.dpi_utils import (
     place_toplevel_centered_on_parent,
     safe_grab_set,
     set_window_size_to_fit_content,
+    wait_window_safely,
 )
 
 
@@ -363,7 +364,7 @@ class UpdateWindow:
         self.root.destroy()
 
     def run(self):
-        self.root.wait_window()
+        wait_window_safely(self.root)
 
 
 def show_update_window(parent, *, pending_update=None):
@@ -408,7 +409,7 @@ class UpdateProgressWindow:
         self.start_update_process()
 
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.window.wait_window()
+        wait_window_safely(self.window)
 
     def setup_ui(self):
         """Настраивает UI окна прогресса"""

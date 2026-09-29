@@ -97,6 +97,24 @@ def application_tk_root(widget):
     return w
 
 
+def wait_window_safely(window, parent=None) -> None:
+    """wait_window с защитой от уже уничтоженного окна.
+
+    Между update() и wait_window() окно может быть уничтожено обработчиком,
+    выполнившимся внутри update(); тогда Tk падает с
+    «bad window path name». Проверяем живость и глотаем TclError.
+    """
+    try:
+        if window is None or not window.winfo_exists():
+            return
+        master = parent if parent is not None else window
+        master.wait_window(window)
+    except tk.TclError:
+        pass
+    except RuntimeError:
+        pass
+
+
 def safe_grab_set(window) -> None:
     """Делает окно модальным после маппинга, не падая на «window not viewable».
 

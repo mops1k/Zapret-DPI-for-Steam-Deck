@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import tkinter as tk
 
-from core.dpi_utils import safe_grab_set
+from core.dpi_utils import safe_grab_set, wait_window_safely
 
 def show_info(parent, title, message):
     """Показывает информационное сообщение в стиле приложения"""
@@ -124,7 +124,7 @@ def _show_dialog(parent, title, message, dialog_type):
 
 
     # Ждем закрытия окна
-    parent.wait_window(dialog)
+    wait_window_safely(dialog, parent)
     return True
 
 def _show_question(parent, title, message):
@@ -229,7 +229,7 @@ def _show_question(parent, title, message):
         pass
 
     # Ждем закрытия окна
-    parent.wait_window(dialog)
+    wait_window_safely(dialog, parent)
     return result["value"]
 
 def _show_question_cancel(parent, title, message):
@@ -354,7 +354,7 @@ def _show_question_cancel(parent, title, message):
     dialog.geometry(f"{width}x{height}+{x}+{y}")
 
     # Ждем закрытия окна
-    parent.wait_window(dialog)
+    wait_window_safely(dialog, parent)
     return result["value"]
 
 def _close_dialog(dialog):

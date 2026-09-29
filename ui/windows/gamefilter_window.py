@@ -6,7 +6,7 @@ import tkinter as tk
 from ui.components.button_styler import create_hover_button
 from ui.windows.main.protocols import MainWindowActions
 from ui.components.custom_messagebox import show_info, show_error
-from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set
+from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set, wait_window_safely
 from core.game_filter_settings import (
     GAMEFILTER_PROTOCOL_BOTH,
     GAMEFILTER_PROTOCOL_TCP,
@@ -223,7 +223,7 @@ class GameFilterProtocolModeWindow:
             safe_grab_set(self.root)
         except tk.TclError:
             pass
-        self._parent.wait_window(self.root)
+        wait_window_safely(self.root, self._parent)
 
 
 class GameFilterWindow:
@@ -389,7 +389,7 @@ class GameFilterWindow:
             safe_grab_set(self.root)
         except tk.TclError:
             pass
-        self.root.wait_window()
+        wait_window_safely(self.root)
 
 
 class GamePresetWindow:
@@ -707,4 +707,4 @@ class GamePresetWindow:
             safe_grab_set(self.root)
         except tk.TclError:
             pass
-        self.root.wait_window()
+        wait_window_safely(self.root)

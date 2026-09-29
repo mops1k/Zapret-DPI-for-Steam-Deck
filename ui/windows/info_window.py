@@ -7,6 +7,7 @@ from core.dpi_utils import (
     center_toplevel_on_parent,
     fit_toplevel_to_content,
     place_toplevel_centered_on_parent,
+    wait_window_safely,
 )
 from core.tk_scale_lab_helpers import logical_ui_scale, warning_dialog_scale, winfo_dpi
 from core.manager_config import VERSION_CONFIG
@@ -340,4 +341,4 @@ def show_info_dialog(parent):
     dialog.focus_set()
 
     # Ждем закрытия окна
-    dialog.wait_window()
+    wait_window_safely(dialog)
