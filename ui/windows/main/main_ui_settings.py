@@ -141,8 +141,13 @@ class MainUISettingsMixin:
         self.close_settings_menu()
         selector_window = StrategySelectorWindow(self.root)
         selector_window.run()
-        # После закрытия окна обновляем отображение стратегии
-        self.load_current_strategy()
+        # Пока был открыт селектор, главное окно могли закрыть — тогда виджеты
+        # уже уничтожены и обращаться к ним нельзя.
+        try:
+            if self.root.winfo_exists():
+                self.load_current_strategy()
+        except tk.TclError:
+            pass
 
     def open_connection_check(self):
         """Открывает окно проверки соединения"""

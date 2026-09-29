@@ -172,8 +172,17 @@ class MainUILayoutMixin:
         )
         self.status_message.pack(pady=(0, 0))
 
+    def _strategy_label_alive(self) -> bool:
+        """Виджет стратегии может быть уже уничтожен: окно закрывают с открытым селектором."""
+        try:
+            return bool(self.strategy_value) and self.strategy_value.winfo_exists()
+        except (tk.TclError, AttributeError):
+            return False
+
     def load_current_strategy(self):
         """Загружает и отображает текущую стратегию из файла name_strategy.txt"""
+        if not self._strategy_label_alive():
+            return
         try:
             manager_dir = os.path.expanduser("~/Zapret_DPI_Manager")
             name_strategy_file = os.path.join(manager_dir, "utils", "name_strategy.txt")
@@ -216,11 +225,14 @@ class MainUILayoutMixin:
                     f.write("")
                 strategy_name = "Не выбрано"
 
+            if not self._strategy_label_alive():
+                return
             self.strategy_value.config(text=strategy_name)
 
         except Exception as e:
             print(f"Ошибка загрузки стратегии: {e}")
-            self.strategy_value.config(text="Не выбрано")
+            if self._strategy_label_alive():
+                self.strategy_value.config(text="Не выбрано")
 
     def toggle_settings_menu(self, event=None):
         """Открывает/закрывает меню настроек"""
