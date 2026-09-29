@@ -1,7 +1,6 @@
 import tkinter as tk
-import os
 from ui.components.button_styler import create_hover_button
-from core.strategy_data import STRATEGY_OPTIONS, save_strategy_names, load_strategy_names, get_strategy_command
+from core.strategy_data import STRATEGY_OPTIONS, save_strategy_names, load_strategy_names
 from core.service_manager import ServiceManager
 from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set
 

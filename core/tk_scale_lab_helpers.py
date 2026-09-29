@@ -61,40 +61,6 @@ def pct_of_96_dpi(dpi: float | None) -> str:
     return f"{100.0 * dpi / 96.0:.1f}%"
 
 
-def build_system_scale_report_lines(root: tk.Misc) -> list[str]:
-    """Сводка сигналов масштаба при старте/обновлении (тест, без привязки к конкретной DE)."""
-    dpi_tk = winfo_dpi(root)
-    dpi_xft = dpi_from_xrdb()
-    hints = env_scale_hints()
-    tk_s = f"{dpi_tk:.2f}" if dpi_tk is not None else "—"
-    xf_s = f"{dpi_xft:.2f}" if dpi_xft is not None else "—"
-    lines = [
-        "── Определение масштаба экрана (тест при запуске / «Обновить текст») ──",
-        f"  Tk  winfo_fpixels('1i'):  {tk_s}  →  от 96 DPI: {pct_of_96_dpi(dpi_tk)}",
-        f"  X11 Xft.dpi (xrdb):      {xf_s}  →  от 96 DPI: {pct_of_96_dpi(dpi_xft)}",
-    ]
-    if hints:
-        lines.append("  Переменные окружения (часто задают тулкиты/игры):")
-        for key, val in hints:
-            lines.append(f"    {key}={val}")
-    else:
-        lines.append("  Переменные GDK_SCALE / QT_SCALE_FACTOR / … — не заданы в окружении процесса.")
-    lines.append(
-        "  Подсказка: процент от 96 для строк выше = DPI÷96×100. Ползунок масштаба в KDE/GNOME "
-        "на Wayland может расходиться с Xft.dpi; ориентир для этого окна — строка Tk."
-    )
-    lines.append("")
-    return lines
-
-
-def apply_scaling_for_dpi(root: tk.Misc, dpi: float) -> None:
-    """Задать tk scaling = dpi/72 (пикселей на point)."""
-    if dpi <= 0:
-        return
-    pxpt = dpi / 72.0
-    root.tk.call("tk", "scaling", "-displayof", ".", pxpt)
-
-
 def logical_ui_scale(root: tk.Misc) -> float:
     """Коэффициент масштаба виджетов относительно эталона 96 DPI (как 100% / 125% в настройках дисплея).
 

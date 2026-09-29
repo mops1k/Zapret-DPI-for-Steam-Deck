@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-import platform
 import shutil
 import subprocess
 import sys
@@ -529,49 +528,33 @@ class ZapretUninstaller:
         self.log_debug("Зависимости успешно удалены")
         return True
 
-    def remove_desktop_shortcuts(self):
-        """Удаляет ярлыки с рабочего стола"""
-        self.current_task = "remove_desktop_shortcuts"
-        self.log_debug("Удаление ярлыков с рабочего стола...")
-
-        desktop_paths = [
-            os.path.expanduser("~/Рабочий стол/Zapret_DPI_Manager.desktop"),  # Русский
-            os.path.expanduser("~/Desktop/Zapret_DPI_Manager.desktop"),       # Английский
-        ]
-
-        desktop_removed = False
-        for desktop_path in desktop_paths:
-            if os.path.exists(desktop_path):
-                try:
-                    os.remove(desktop_path)
-                    self.log_debug(f"Ярлык удален: {desktop_path}")
-                    desktop_removed = True
-                except Exception as e:
-                    self.log_debug(f"Не удалось удалить ярлык {desktop_path}: {e}")
-
-        if not desktop_removed:
-            self.log_debug("Ярлыки на рабочем столе не найдены")
-
-        return True
-
     def remove_sudo_cache(self):
-        """Удаляет файл кэша sudo пароля"""
+        """Удаляет кэш sudo-пароля (старый файл и кэш askpass)."""
         self.current_task = "remove_sudo_cache"
-        self.log_debug("Удаление файла кэша sudo пароля...")
+        self.log_debug("Удаление кэша sudo-пароля...")
 
-        cache_path = os.path.expanduser("~/.zapret_sudo_cache")
-
-        if not os.path.exists(cache_path):
-            self.log_debug("Файл кэша sudo пароля не существует, пропускаем удаление")
-            return True
+        removed = False
+        legacy_path = os.path.expanduser("~/.zapret_sudo_cache")
+        if os.path.exists(legacy_path):
+            try:
+                os.remove(legacy_path)
+                self.log_debug(f"Удалён старый кэш: {legacy_path}")
+                removed = True
+            except Exception as e:
+                self.log_debug(f"Не удалось удалить {legacy_path}: {e}")
 
         try:
-            os.remove(cache_path)
-            self.log_debug(f"Файл кэша sudo пароля успешно удален: {cache_path}")
-            return True
+            from core.sudo_helper import forget_cached_password
+
+            if forget_cached_password():
+                self.log_debug("Удалён кэш пароля askpass")
+                removed = True
         except Exception as e:
-            self.log_debug(f"Не удалось удалить файл кэша sudo пароля {cache_path}: {e}")
-            return False
+            self.log_debug(f"Не удалось удалить кэш askpass: {e}")
+
+        if not removed:
+            self.log_debug("Файлы кэша sudo-пароля не найдены")
+        return True
 
     def reload_systemd(self):
         """Обновляет systemd"""
@@ -627,7 +610,7 @@ class ZapretUninstaller:
             user_apps_dir = os.path.expanduser("~/.local/share/applications")
             if os.path.exists(user_apps_dir):
                 subprocess.run(['update-desktop-database', user_apps_dir],
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, timeout=30)
         except Exception as e:
             self.log_debug(f"Не удалось обновить кэш меню: {e}")
 

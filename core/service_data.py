@@ -1,4 +1,3 @@
-import os
 
 SERVICE_CATEGORIES = {
     "chatgpt": {

@@ -6,7 +6,6 @@ import webbrowser
 from ui.components.button_styler import create_hover_button
 from ui.windows.donat_window import DonationWindow
 from ui.windows.info_window import show_info_dialog
-from core.dpi_utils import fit_toplevel_to_content
 
 
 class MainUILayoutMixin:
@@ -237,7 +236,6 @@ class MainUILayoutMixin:
 
     def open_user_guide(self, event=None):
         """Открывает руководство пользователя в браузере"""
-        import webbrowser
         url = "https://github.com/mops1k/Zapret-DPI-for-Steam-Deck/blob/main/docs/user-guide-zapret-dpi-manager-steam-deck-ru.md"
 
         try:

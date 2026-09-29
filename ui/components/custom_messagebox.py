@@ -56,13 +56,10 @@ def _show_dialog(parent, title, message, dialog_type):
     # Определяем цвета в зависимости от типа
     if dialog_type == "error":
         title_color = 'white'  # Красный
-        button_color = '#ff3b30'
     elif dialog_type == "warning":
         title_color = 'white'  # Оранжевый
-        button_color = '#ff9500'
     else:  # info
         title_color = 'white'  # Синий
-        button_color = '#0a84ff'
 
     # Основной фрейм
     main_frame = tk.Frame(dialog, bg='#182030', padx=30, pady=25)
@@ -120,6 +117,10 @@ def _show_dialog(parent, title, message, dialog_type):
     height = dialog.winfo_height()
     x = parent.winfo_rootx() + (parent.winfo_width() // 2) - (width // 2)
     y = parent.winfo_rooty() + (parent.winfo_height() // 2) - (height // 2)
+    try:
+        dialog.geometry(f"+{max(0, x)}+{max(0, y)}")
+    except tk.TclError:
+        pass
 
 
     # Ждем закрытия окна
@@ -222,6 +223,10 @@ def _show_question(parent, title, message):
     height = dialog.winfo_height()
     x = parent.winfo_rootx() + (parent.winfo_width() // 2) - (width // 2)
     y = parent.winfo_rooty() + (parent.winfo_height() // 2) - (height // 2)
+    try:
+        dialog.geometry(f"+{max(0, x)}+{max(0, y)}")
+    except tk.TclError:
+        pass
 
     # Ждем закрытия окна
     parent.wait_window(dialog)
@@ -311,13 +316,13 @@ def _show_question_cancel(parent, title, message):
         yes_button.config(bg='#34c759')
 
     def on_leave_yes(event):
-        yes_button.config(bg='#30d158')
+        yes_button.config(bg='#15354D')
 
     def on_enter_no(event):
         no_button.config(bg='#ff453a')
 
     def on_leave_no(event):
-        no_button.config(bg='#ff3b30')
+        no_button.config(bg='#15354D')
 
     def on_enter_cancel(event):
         cancel_button.config(bg='#98989d')
@@ -342,6 +347,10 @@ def _show_question_cancel(parent, title, message):
     height = dialog.winfo_height()
     x = parent.winfo_rootx() + (parent.winfo_width() // 2) - (width // 2)
     y = parent.winfo_rooty() + (parent.winfo_height() // 2) - (height // 2)
+    try:
+        dialog.geometry(f"+{max(0, x)}+{max(0, y)}")
+    except tk.TclError:
+        pass
     dialog.geometry(f"{width}x{height}+{x}+{y}")
 
     # Ждем закрытия окна

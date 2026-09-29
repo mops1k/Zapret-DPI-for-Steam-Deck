@@ -65,6 +65,15 @@ for archive in "${MANAGER_ARCHIVE}" "${UPDATER_ARCHIVE}"; do
     printf '%-32s %8s байт, %s записей\n' "$(basename "${archive}")" "$(stat -c%s "${archive}")" "$(tar tzf "${archive}" | wc -l)"
 done
 
+# Установщик: архив пересобирается из installer/install_zapret.sh, чтобы копия
+# в репозитории и в архиве не расходились.
+INSTALLER_SRC="${REPO_ROOT}/installer/install_zapret.sh"
+INSTALLER_ARCHIVE="${REPO_ROOT}/install_zapret.tar.gz"
+if [ -f "${INSTALLER_SRC}" ]; then
+    tar czf "${INSTALLER_ARCHIVE}" -C "$(dirname "${INSTALLER_SRC}")" install_zapret.sh
+    printf '%-32s %8s байт, %s записей\n' "install_zapret.tar.gz" "$(stat -c%s "${INSTALLER_ARCHIVE}")" "$(tar tzf "${INSTALLER_ARCHIVE}" | wc -l)"
+fi
+
 if tar tzf "${MANAGER_ARCHIVE}" | grep -qE '__pycache__|\.pyc$'; then
     echo "предупреждение: в архив попали __pycache__/*.pyc" >&2
 fi

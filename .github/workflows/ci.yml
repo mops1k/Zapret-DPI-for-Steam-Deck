@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Python syntax
+        run: python -m compileall -q core ui tools main.py
+
+      - name: Shell syntax
+        run: |
+          for file in zapret/system/*.sh tools/*.sh installer/*.sh; do
+            [ -f "$file" ] || continue
+            bash -n "$file"
+          done
+
+      - name: Strategy files (placeholders, format)
+        run: python tools/validate_strategies.py
+
+      - name: Flowseal conversion matches files/strategy
+        run: python tools/convert_flowseal_strategies.py --check
+
+      - name: Lint (ruff)
+        run: ruff check core ui tools main.py

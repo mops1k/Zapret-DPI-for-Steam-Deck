@@ -2,7 +2,6 @@
 import subprocess
 import tkinter as tk
 import os
-import sys
 import tempfile
 import tarfile
 import shutil
@@ -14,6 +13,18 @@ from tkinter import messagebox
 from core.app_logging import get_error_logger
 from core.dpi_utils import place_toplevel_centered_on_parent
 from core.zapret_updater import find_bundle_root, get_bundle_download_url
+
+# Файлы, которые могут содержать пользовательские данные: при восстановлении
+# существующие версии не перезаписываются.
+PROTECTED_FILE_NAMES = {
+    "config.txt",
+    "list-general.txt",
+    "ipset-all.txt",
+    "list-general_user.txt",
+    "list-exclude_user.txt",
+    "ipset-all_user.txt",
+    "ipset-exclude_user.txt",
+}
 
 
 class ZapretFileChecker:
@@ -53,9 +64,8 @@ class ZapretFileChecker:
             self.manager_dir / "core" / "sudo_helper.py",
             self.manager_dir / "ui" / "components" / "custom_messagebox.py",
 
-            # Файлы конфигурации
+            # Файлы конфигурации (name_strategy.txt создаётся в рантайме — не обязателен)
             self.manager_dir / "utils" / "chosen_strategies.txt",
-            self.manager_dir / "utils" / "name_strategy.txt",
 
             # Иконка
             self.manager_dir / "ico" / "zapret.png",
@@ -76,15 +86,16 @@ class ZapretFileChecker:
             self.manager_dir / "utils",
         ]
 
-        # Минимальное количество файлов в папках (чтобы не проверять каждый файл)
+        # Минимальное количество файлов в папках (соответствует составу релиза;
+        # завышенные пороги приводили к бесконечному «восстановлению»).
         self.min_files_in_dir = {
-            self.manager_dir / "files" / "bin": 58,
-            self.manager_dir / "files" / "lists": 42,
-            self.manager_dir / "files" / "strategy": 44,
-            self.manager_dir / "core": 12,
+            self.manager_dir / "files" / "bin": 9,
+            self.manager_dir / "files" / "lists": 11,
+            self.manager_dir / "files" / "strategy": 22,
+            self.manager_dir / "core": 20,
             self.manager_dir / "ico": 1,
             self.manager_dir / "utils": 3,
-            self.manager_dir / "ui" / "windows": 13,
+            self.manager_dir / "ui" / "windows": 14,
             self.manager_dir / "ui" / "components": 2,
         }
 
@@ -279,23 +290,23 @@ class ZapretFileChecker:
 
             self.update_progress("Скачивание архива...", 40)
 
-            curl_cmd = ['curl', '-L', '-o', archive_path, self.zapret_archive_url]
+            # -f: считать HTTP-ошибки (404 и т.п.) ошибкой; таймауты обязательны.
+            curl_cmd = [
+                'curl', '-f', '-L', '--connect-timeout', '10', '--max-time', '120',
+                '-o', archive_path, self.zapret_archive_url,
+            ]
 
-            if self.sudo_password:
-                # Если есть пароль, используем sudo
-                result = self.run_with_sudo(curl_cmd, "Скачивание архива...")
-            else:
-                # Без sudo
-                result = subprocess.run(
-                    curl_cmd,
-                    capture_output=True,
-                    text=True
-                )
-                result = {
-                    'returncode': result.returncode,
-                    'stdout': result.stdout,
-                    'stderr': result.stderr
-                }
+            result = subprocess.run(
+                curl_cmd,
+                capture_output=True,
+                text=True,
+                timeout=150,
+            )
+            result = {
+                'returncode': result.returncode,
+                'stdout': result.stdout,
+                'stderr': result.stderr
+            }
 
             if not result or result['returncode'] != 0:
                 err = result['stderr'] if result else 'No result'
@@ -435,6 +446,10 @@ class ZapretFileChecker:
                 for source_file in source_dir_path.iterdir():
                     if source_file.is_file():
                         target_file = dir_path / source_file.name
+                        # Файлы с пользовательскими данными не затираем.
+                        if source_file.name in PROTECTED_FILE_NAMES and target_file.exists():
+                            self.log_debug(f"↷ Пропуск {source_file.name} (пользовательские данные)")
+                            continue
                         try:
                             shutil.copy2(source_file, target_file)
                             copied_files += 1

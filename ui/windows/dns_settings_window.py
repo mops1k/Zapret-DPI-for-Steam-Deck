@@ -2,7 +2,7 @@
 import tkinter as tk
 import subprocess
 import re
-from ui.components.custom_messagebox import show_info, show_error, ask_yesno
+from ui.components.custom_messagebox import show_info, show_error
 from ui.components.button_styler import create_hover_button
 from core.sudo_helper import run_sudo
 from core.dpi_utils import place_toplevel_centered_on_parent
@@ -50,7 +50,8 @@ class DNSSettingsWindow:
             result = subprocess.run(
                 ['nmcli', '-t', '-f', 'NAME,DEVICE,TYPE', 'connection', 'show', '--active'],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=10,
             )
 
             self.active_device = None
@@ -139,7 +140,8 @@ class DNSSettingsWindow:
             result = subprocess.run(
                 ['resolvectl', 'status', self._resolve_device()],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=10,
             )
 
             if result.returncode == 0:
@@ -386,7 +388,6 @@ class DNSSettingsWindow:
         # Если используется чекбокс (пресет)
         elif selected_dns:
             dns_servers = self.dns_servers[selected_dns]
-            dns_display = f"{selected_dns} ({dns_servers})"
             print(f"Используется пресет DNS: {selected_dns}")
 
             if self.set_custom_dns(dns_servers):
@@ -782,7 +783,8 @@ class DNSSettingsWindow:
             result = subprocess.run(
                 ['resolvectl', 'status', self._resolve_device()],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=10,
             )
 
             if result.returncode == 0:

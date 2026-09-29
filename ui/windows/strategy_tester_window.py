@@ -1,16 +1,13 @@
 import tkinter as tk
-from tkinter import ttk
 import threading
 import time
 import os
 import sys
 import asyncio
 import io
-import contextlib
 from pathlib import Path
 from ui.components.button_styler import create_hover_button
 from core.dpi_utils import place_toplevel_centered_on_parent
-from datetime import datetime, timedelta
 
 
 from core.game_presets import reapply_active_preset_to_config
@@ -353,7 +350,7 @@ class StrategyTesterWindow:
         # Оцениваем общее время (примерно 30 секунд на стратегию)
         tester = self.StrategyTester(self.project_root)
         all_strategies = tester.get_available_strategies()
-        estimated_time = len(all_strategies) * 30 if all_strategies else 300  # 5 минут по умолчанию
+        len(all_strategies) * 30 if all_strategies else 300  # 5 минут по умолчанию
 
         # Выводим информацию о начале тестирования
         self.log_message("=" * 60, "#4fc3f7")

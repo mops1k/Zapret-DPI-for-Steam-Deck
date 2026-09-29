@@ -3,7 +3,7 @@ import tkinter as tk
 import os
 import subprocess
 from ui.components.custom_messagebox import show_info, show_error
-from core.service_data import SERVICE_CATEGORIES, PROXY_DOMAINS
+from core.service_data import SERVICE_CATEGORIES
 from ui.components.button_styler import create_hover_button
 from core.sudo_helper import run_sudo
 from core.dpi_utils import (
@@ -548,7 +548,7 @@ class ServiceUnlockWindow:
             # Для систем с nscd
             if os.path.exists('/etc/nscd.conf'):
                 result = subprocess.run(['nscd', '-i', 'hosts'],
-                                     capture_output=True, text=True)
+                                     capture_output=True, text=True, timeout=15)
                 if result.returncode == 0:
                     show_info(
                         self.window,

@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 
 import tkinter as tk
-from tkinter import scrolledtext
 import threading
 import subprocess
 import time
 import socket
 import http.client
-import urllib.parse
 import ssl
-from urllib.error import URLError
 from ui.components.button_styler import create_hover_button
 from core.dpi_utils import place_toplevel_centered_on_parent
 import os
@@ -266,7 +263,8 @@ class ConnectionCheckWindow:
             result = subprocess.run(
                 ["ip", "route", "show", "default"],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=10,
             )
 
             if result.stdout:
@@ -281,7 +279,8 @@ class ConnectionCheckWindow:
                         ping_result = subprocess.run(
                             ["ping", "-c", "2", "-W", "1", gateway],
                             capture_output=True,
-                            text=True
+                            text=True,
+                            timeout=10,
                         )
 
                         if ping_result.returncode == 0:
@@ -756,8 +755,8 @@ class ConnectionCheckWindow:
         # Обновляем кнопку обратно в состояние "Запустить проверку"
         self.toggle_button.config(text="Запустить проверку", bg='#15354D')
 
-        total_success = sum(1 for _, _, success in self.results if success)
-        total_tests = len(self.results)
+        sum(1 for _, _, success in self.results if success)
+        len(self.results)
 
     def on_close(self):
         """Закрывает окно"""

@@ -13,9 +13,56 @@ setup_error_logging()
 
 from ui.windows.main_window import MainWindow
 
+
+def _acquire_single_instance_lock():
+    """Блокировка второго экземпляра: два процесса пишут config.txt и службу.
+
+    Возвращает открытый файл (держит блокировку, пока жив процесс) или None.
+    """
+    try:
+        import fcntl
+        from pathlib import Path
+
+        cache_dir = Path(
+            os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))
+        ) / "zapret_dpi_manager"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        lock_file = open(cache_dir / "manager.lock", "w", encoding="utf-8")
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_file.write(str(os.getpid()))
+        lock_file.flush()
+        return lock_file
+    except OSError:
+        return None
+    except Exception as e:
+        print(f"Не удалось создать блокировку экземпляра: {e}")
+        return None
+
+
+def _warn_already_running():
+    """Сообщает, что менеджер уже запущен (диалог, если есть GUI)."""
+    message = "Zapret DPI Manager уже запущен."
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showinfo("Zapret DPI Manager", message)
+        root.destroy()
+    except Exception:
+        print(message)
+
+
 def main():
     """Точка входа в программу"""
     err_log = get_error_logger()
+
+    lock = _acquire_single_instance_lock()
+    if lock is None:
+        _warn_already_running()
+        sys.exit(0)
+
     try:
         app = MainWindow()
         app.run()

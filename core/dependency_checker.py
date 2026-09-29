@@ -2,7 +2,6 @@
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import tkinter as tk
@@ -64,11 +63,11 @@ class DependencyChecker:
         try:
             if package_name == 'curl':
                 result = subprocess.run(['curl', '--version'],
-                                      capture_output=True, text=True)
+                                      capture_output=True, text=True, timeout=10)
                 self.log_debug(f"curl --version: код={result.returncode}, вывод={result.stdout[:100]}...")
             else:
                 result = subprocess.run(['which', package_name],
-                                      capture_output=True, text=True)
+                                      capture_output=True, text=True, timeout=10)
                 self.log_debug(f"which {package_name}: код={result.returncode}, вывод={result.stdout.strip()}")
 
             installed = result.returncode == 0

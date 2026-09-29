@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 import tkinter as tk
 from tkinter import ttk
-from tkinter import messagebox
 import os
 import re
-from ui.components.custom_messagebox import show_info, show_error, ask_yesno, ask_yesnocancel
+from ui.components.custom_messagebox import show_info
 from core.dpi_utils import (
     application_tk_root,
     center_toplevel_on_parent_with_size,

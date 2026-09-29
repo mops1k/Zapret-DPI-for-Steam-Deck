@@ -1,7 +1,6 @@
 """Проверки при запуске и фоновая проверка обновлений."""
 import os
 import threading
-import tkinter as tk
 
 from ui.integrations.dependency_check import run_dependency_check
 from ui.integrations.zapret_check import run_zapret_check
@@ -70,7 +69,7 @@ class MainStartupMixin:
             path = os.path.join(lists_dir, filename)
             if not os.path.isfile(path):
                 try:
-                    with open(path, "w", encoding="utf-8") as f:
+                    with open(path, "w", encoding="utf-8"):
                         pass
                 except OSError as e:
                     print(f"Не удалось создать {filename}: {e}")

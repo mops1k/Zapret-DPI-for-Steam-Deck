@@ -1,0 +1,15 @@
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [".dsh", "dist", "build"]
+
+[tool.ruff.lint]
+# Начинаем с правил, которые ломают код (синтаксис, неопределённые имена,
+# неиспользуемые импорты). Остальные категории включаем по мере чистки файлов.
+select = ["E9", "F"]
+ignore = [
+    "F541",  # f-string без подстановок — косметика
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tools/*.py" = ["E501"]

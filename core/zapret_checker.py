@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import getpass
 import os
 import shutil
 import subprocess
@@ -115,7 +114,8 @@ class ZapretChecker:
                     result = subprocess.run(
                         ["ls", "-la", file_path],
                         capture_output=True,
-                        text=True
+                        text=True,
+                        timeout=10,
                     )
                     if result.returncode == 0:
                         self.log_debug(f"Информация о файле {file_name}: {result.stdout.strip()}")
@@ -135,7 +135,8 @@ class ZapretChecker:
             result = subprocess.run(
                 ["systemctl", "is-active", "zapret"],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=5,
             )
             return result.returncode == 0 and result.stdout.strip() == "active"
         except Exception:

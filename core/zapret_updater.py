@@ -4,8 +4,6 @@ import os
 import tempfile
 import tarfile
 import shutil
-import subprocess
-import threading
 import time
 import urllib.error
 import urllib.request

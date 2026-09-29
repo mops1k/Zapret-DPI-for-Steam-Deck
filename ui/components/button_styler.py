@@ -61,10 +61,12 @@ def apply_hover_effect(button):
     hover_bg = '#1E4A6E'  # Более светлый оттенок синего
 
     def on_enter(event):
+        # Запоминаем актуальный цвет: его могли изменить после создания кнопки.
+        button._bg_before_hover = button.cget('bg')
         button.config(bg=hover_bg)
 
     def on_leave(event):
-        button.config(bg=original_bg)
+        button.config(bg=getattr(button, '_bg_before_hover', original_bg))
 
     button.bind("<Enter>", on_enter)
     button.bind("<Leave>", on_leave)

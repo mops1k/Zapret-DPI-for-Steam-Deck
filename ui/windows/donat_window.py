@@ -1,5 +1,4 @@
 import tkinter as tk
-import webbrowser
 import os
 from ui.components.button_styler import create_hover_button
 from core.dpi_utils import place_toplevel_centered_on_parent
@@ -33,6 +32,7 @@ class DonationWindow:
             icon_path = os.path.join(manager_dir, "ico/zapret.png")
             if os.path.exists(icon_path):
                 icon = tk.PhotoImage(file=icon_path)
+                self._icon_image = icon
                 self.root.iconphoto(True, icon)
         except Exception as e:
             print(f"Не удалось установить иконку: {e}")
@@ -95,7 +95,7 @@ class DonationWindow:
             else:
                 raise FileNotFoundError("QR код не найден")
 
-        except Exception as e:
+        except Exception:
             # Если QR код не найден, показываем сообщение
             error_label = tk.Label(qr_frame,
                                   text="QR-код не найден",

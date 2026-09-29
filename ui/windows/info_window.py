@@ -1,10 +1,7 @@
 import tkinter as tk
 import webbrowser
-import subprocess
-import urllib.parse
 import re
 import os
-from urllib.request import urlopen
 from ui.components.button_styler import create_hover_button
 from core.dpi_utils import (
     center_toplevel_on_parent,
@@ -30,10 +27,11 @@ def setup_window_properties(self):
     # Устанавливаем иконку
     try:
         manager_dir = os.path.expanduser("~/Zapret_DPI_Manager")
-        icon_path = os.path.join(manager_dir, "ico/adguard.png")
+        icon_path = os.path.join(manager_dir, "ico/zapret.png")
         if os.path.exists(icon_path):
-            # Для PNG файлов в tkinter
+            # Для PNG файлов в tkinter; ссылку сохраняем от сборщика мусора.
             icon = tk.PhotoImage(file=icon_path)
+            self._icon_image = icon
             self.root.iconphoto(True, icon)
     except Exception as e:
         print(f"Не удалось установить иконку: {e}")
@@ -53,9 +51,10 @@ def show_info_dialog(parent):
         dialog.wm_class("ZapretDPIManager")
 
         manager_dir = os.path.expanduser("~/Zapret_DPI_Manager")
-        icon_path = os.path.join(manager_dir, "ico/adguard.png")
+        icon_path = os.path.join(manager_dir, "ico/zapret.png")
         if os.path.exists(icon_path):
             icon = tk.PhotoImage(file=icon_path)
+            dialog._icon_image = icon
             dialog.iconphoto(True, icon)
     except Exception as e:
         print(f"Не удалось установить свойства окна: {e}")
@@ -111,10 +110,6 @@ def show_info_dialog(parent):
     links_shell.pack(fill=tk.X)
 
     # Сначала объявляем функции для ссылок
-    def open_official_page(event):
-        available_site = get_available_site()
-        webbrowser.open(available_site)
-
     def open_github_page(event):
         webbrowser.open("https://github.com/mops1k/Zapret-DPI-for-Steam-Deck")
 

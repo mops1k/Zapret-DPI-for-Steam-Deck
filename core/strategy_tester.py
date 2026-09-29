@@ -173,7 +173,6 @@ class StrategyTester:
         """
         Загружает цели для тестирования
         """
-        targets = []
 
         if mode == "dpi":
             # DPI-цели
@@ -1302,9 +1301,6 @@ class StrategyTester:
     def _generate_html_report(self, results: List[Dict]) -> str:
         """Генерирует HTML содержимое отчета"""
 
-        total_tests = sum(r.get('total_targets', 0) for r in results)
-        total_success = sum(r.get('successful', 0) for r in results)
-
         # Разделяем стратегии на рабочие, частично рабочие и нерабочие
         working_strategies = []
         partially_working_strategies = []  # Частично рабочие (YouTube или Discord работает)
@@ -1991,22 +1987,16 @@ class StrategyTester:
         if critical_fail and critical_reason:
             if "YouTube и Discord не работают" in critical_reason:
                 is_both_broken = True
-                short_reason = "YouTube и Discord не работают"
             elif "YouTube работает, но Discord не работает" in critical_reason:
                 is_partial = True
-                short_reason = "Discord не работает"
             elif "Discord работает, но YouTube не работает" in critical_reason:
                 is_partial = True
-                short_reason = "YouTube не работает"
             elif "YouTube не работает" in critical_reason:
                 is_both_broken = True  # Если только один сервис тестировался
-                short_reason = "YouTube не работает"
             elif "Discord не работает" in critical_reason:
                 is_both_broken = True  # Если только один сервис тестировался
-                short_reason = "Discord не работает"
             elif "Эффективность ниже порога" in critical_reason:
                 is_low_percent = True
-                short_reason = f"Эффективность {success_rate:.1f}% < 60%"
 
         # Определяем класс прогресс-бара
         progress_class = "progress-fill"
