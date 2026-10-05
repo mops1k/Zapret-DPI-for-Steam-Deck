@@ -3,7 +3,6 @@ import threading
 
 from core.manager_config import VERSION_CONFIG
 from core.zapret_updater import ZapretBundleUpdater
-from ui.components.button_styler import create_hover_button
 from ui.components.material import LinearProgress, MaterialCard, TopAppBar, filled_button, text_button
 from ui.theme import theme
 from core.dpi_utils import (

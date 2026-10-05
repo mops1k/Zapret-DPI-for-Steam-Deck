@@ -392,7 +392,6 @@ class MaterialRadio(_TogglableBase):
             outline, fill = theme.color("primary"), theme.color("primary")
         else:
             outline, fill = theme.color("outline"), ""
-        r = size / 2 - 1
         self._canvas.create_oval(1, 1, size - 1, size - 1, outline=outline, width=2, fill=fill)
         if selected:
             inner = size * 0.28

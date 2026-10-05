@@ -180,7 +180,13 @@ def main() -> int:
     from ui.windows.strategy_tester_window import StrategyTesterWindow
     from ui.windows.strategy_window import StrategyWindow
 
-    for cls in (StrategySelectorWindow, AutoSelectionWindow, StrategySelectionWindow, StrategyWindow):
+    for cls in (
+        StrategySelectorWindow,
+        AutoSelectionWindow,
+        StrategySelectionWindow,
+        StrategyWindow,
+        CustomStrategyWindow,
+    ):
         check(cls.__name__, lambda c=cls: c(root), lambda w: getattr(w, "root", None))
 
     check("StrategyTesterWindow", lambda: StrategyTesterWindow(root), lambda w: w.window)
