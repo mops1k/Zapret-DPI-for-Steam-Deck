@@ -60,3 +60,6 @@ CI (`.github/workflows/ci.yml`) выполняет те же шаги, кром�
 - `files/bin/` — payload-бинарники; `zapret/bins/<arch>/nfqws` — движок (исполняемый бит обязателен).
 - `core/strategy_data.py` (`STRATEGY_OPTIONS`) — варианты конструктора стратегии;
   `core/game_presets.py` (`GAME_PRESETS`) — игровые пресеты.
+- `tools/flowseal_src/*.bat` — исходники стратегий из Flowseal/zapret-discord-youtube
+  (версионируются, чтобы `tools/convert_flowseal_strategies.py --check` работал в CI,
+  где локального `.dsh/` нет); `--src` переопределяет каталог.

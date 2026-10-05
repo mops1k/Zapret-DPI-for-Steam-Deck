@@ -32,7 +32,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SRC = REPO_ROOT / ".dsh" / "tmp" / "flowseal" / "src"
+# Исходные .bat Flowseal лежат в репозитории, чтобы проверка работала и в CI
+# (локальный .dsh/ в git не попадает). Переопределяется ключом --src.
+DEFAULT_SRC = REPO_ROOT / "tools" / "flowseal_src"
 DEFAULT_OUT = REPO_ROOT / "files" / "strategy"
 
 # Имя .bat -> имя файла стратегии менеджера (без расширения).
