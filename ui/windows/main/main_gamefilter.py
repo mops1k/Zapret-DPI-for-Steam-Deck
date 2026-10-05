@@ -14,6 +14,7 @@ from core.game_filter_settings import (
     GAMEFILTER_PROTOCOL_TCP,
     GAMEFILTER_PROTOCOL_UDP,
 )
+from ui.theme import theme
 
 
 def _game_filter_protocol_label(mode: str) -> str:
@@ -29,9 +30,9 @@ class MainGameFilterMixin:
         """Обновляет цвет индикатора Game Filter"""
         active_preset = get_active_preset_id()
         if self.is_game_filter_enabled() or active_preset is not None:
-            self.game_filter_indicator.config(fg='#30d158')  # Зеленый
+            self.game_filter_indicator.config(fg=theme.color("success"))
         else:
-            self.game_filter_indicator.config(fg='#ff3b30')  # Красный
+            self.game_filter_indicator.config(fg=theme.color("error"))
 
     def is_game_filter_enabled(self):
         """Проверяет, включен ли Game Filter"""
@@ -54,26 +55,9 @@ class MainGameFilterMixin:
         else:
             status_text = "GameFilter выключен\nНажмите для включения"
 
-        # Позиционируем подсказку рядом с иконкой
-        x = self.game_filter_indicator.winfo_rootx() - 20
-        y = self.game_filter_indicator.winfo_rooty() + self.game_filter_indicator.winfo_height() + 5
-
-        # Создаем всплывающее окно
-        self.game_filter_tooltip = tk.Toplevel(self.root)
-        self.game_filter_tooltip.wm_overrideredirect(True)
-        self.game_filter_tooltip.geometry(f"+{x}+{y}")
-        self.game_filter_tooltip.configure(bg='#15354D', relief=tk.SOLID, bd=1)
-
-        # Добавляем текст
-        label = tk.Label(self.game_filter_tooltip,
-                        text=status_text,
-                        font=("Arial", 10),
-                        fg='white',
-                        bg='#15354D',
-                        padx=10,
-                        pady=5,
-                        justify=tk.LEFT)
-        label.pack()
+        self.game_filter_tooltip = self._build_tooltip(
+            self.game_filter_indicator, status_text, offset_x=-20
+        )
 
     def hide_game_filter_tooltip(self, event=None):
         """Скрывает всплывающее окошко Game Filter"""
@@ -170,8 +154,8 @@ class MainGameFilterMixin:
         # Блокируем UI
         self.game_filter_indicator.config(state=tk.DISABLED)
 
-        # Показываем анимацию загрузки (меняем цвет индикатора на оранжевый)
-        self.game_filter_indicator.config(fg='#ff9500')
+        # Показываем анимацию загрузки (меняем цвет индикатора на предупреждающий)
+        self.game_filter_indicator.config(fg=theme.color("warning"))
         self.show_status_message(f"{status_message}, перезапуск службы...")
         self.root.update()
 

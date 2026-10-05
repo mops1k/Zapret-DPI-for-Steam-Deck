@@ -17,6 +17,7 @@ from core.dpi_utils import (
 )
 from core.game_filter_settings import normalize_game_filter_protocol_mode
 from core.tk_scale_lab_helpers import warning_dialog_scale
+from ui.theme import theme
 
 
 class GameFilterWarningHost(Protocol):
@@ -45,7 +46,7 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
     # Создаем окно предупреждения
     warning_window = tk.Toplevel(host.root)
     warning_window.title("ВНИМАНИЕ!")
-    warning_window.configure(bg='#182030')
+    warning_window.configure(bg=theme.color('surface'))
     warning_window.resizable(False, False)
 
     # Определяем функцию для проверки Steam Deck
@@ -104,11 +105,11 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
         min(base_height - 60, screen_height - 80)
 
         # Делаем более читаемым для Steam Deck
-        font_title = ("Arial", 14, "bold")
-        font_warning = ("Arial", 11)
-        font_problems = ("Arial", 9)
-        font_final = ("Arial", 10, "bold")
-        font_buttons = ("Arial", 10)
+        font_title = theme.font("title_small", weight="bold")
+        font_warning = theme.font("body_medium")
+        font_problems = theme.font("body_small")
+        font_final = theme.font("label_large", weight="bold")
+        font_buttons = theme.font("label_large")
         button_padx = 12
         button_pady = 6
         button_width = 10
@@ -117,11 +118,11 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
     else:
         # На обычных системах
         width = base_width
-        font_title = ("Arial", 16, "bold")
-        font_warning = ("Arial", 12)
-        font_problems = ("Arial", 10)
-        font_final = ("Arial", 11, "bold")
-        font_buttons = ("Arial", 11)
+        font_title = theme.font("title_medium", weight="bold")
+        font_warning = theme.font("body_large")
+        font_problems = theme.font("body_small")
+        font_final = theme.font("label_large", weight="bold")
+        font_buttons = theme.font("label_large")
         button_padx = 20
         button_pady = 8
         button_width = 12
@@ -135,14 +136,14 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
     # Внешняя колонка фиксированной ширины: перенос и высота не «плавают» с размером Toplevel (лог: 409 vs 644 px).
     outer = tk.Frame(
         warning_window,
-        bg='#182030',
+        bg=theme.color('surface'),
         width=int(width),
         height=min(max(400, int(screen_height) - 80), 900),
     )
     outer.pack(anchor=tk.N)
     outer.pack_propagate(False)
 
-    main_frame = tk.Frame(outer, bg='#182030', padx=padx_main, pady=pady_main)
+    main_frame = tk.Frame(outer, bg=theme.color('surface'), padx=padx_main, pady=pady_main)
     main_frame.pack(fill=tk.X)
 
     # Заголовок
@@ -150,8 +151,8 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
         main_frame,
         text="ВНИМАНИЕ!",
         font=font_title,
-        fg='#ff9500',
-        bg='#182030'
+        fg=theme.color('warning'),
+        bg=theme.color('surface')
     )
     title_label.pack(pady=(0, 10))
 
@@ -161,8 +162,8 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
         main_frame,
         text=warning_text,
         font=font_warning,
-        fg='white',
-        bg='#182030',
+        fg=theme.color('on_surface'),
+        bg=theme.color('surface'),
         justify=tk.CENTER,
         anchor=tk.CENTER,
         wraplength=wrap_px,
@@ -170,15 +171,15 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
     warning_label.pack(pady=(0, 15), fill=tk.X)
 
     # Подробности о проблемах
-    problems_frame = tk.Frame(main_frame, bg='#182030')
+    problems_frame = tk.Frame(main_frame, bg=theme.color('surface'))
     problems_frame.pack(fill=tk.X, pady=(0, 12))
 
     problems_title = tk.Label(
         problems_frame,
         text="Возможные проблемы на Steam Deck:",
         font=font_problems,
-        fg='#ff3b30',
-        bg='#182030',
+        fg=theme.color('error'),
+        bg=theme.color('surface'),
         anchor=tk.W,
     )
     problems_title.pack(fill=tk.X, pady=(0, 5))
@@ -195,8 +196,8 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
             problems_frame,
             text=problem,
             font=font_problems,
-            fg='#AAAAAA',
-            bg='#182030',
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface'),
             anchor=tk.NW,
             justify=tk.LEFT,
             wraplength=wrap_px,
@@ -209,8 +210,8 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
         main_frame,
         text="Пользоваться данной функцией на свой страх и риск",
         font=font_final,
-        fg='#ff9500',
-        bg='#182030',
+        fg=theme.color('warning'),
+        bg=theme.color('surface'),
         justify=tk.CENTER,
         anchor=tk.CENTER,
         wraplength=wrap_px,
@@ -218,17 +219,17 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
     final_warning.pack(pady=(0, 12), fill=tk.X)
 
     # Фрейм для кнопок
-    buttons_frame = tk.Frame(main_frame, bg='#182030')
+    buttons_frame = tk.Frame(main_frame, bg=theme.color('surface'))
     buttons_frame.pack(fill=tk.X)
 
-    buttons_center_frame = tk.Frame(buttons_frame, bg='#182030')
+    buttons_center_frame = tk.Frame(buttons_frame, bg=theme.color('surface'))
     buttons_center_frame.pack()
 
     # Стиль кнопок
     button_style = {
         'font': font_buttons,
-        'bg': '#15354D',
-        'fg': 'white',
+        'bg': theme.color('secondary_container'),
+        'fg': theme.color('on_surface'),
         'bd': 0,
         'padx': button_padx,
         'pady': button_pady,
@@ -246,10 +247,6 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
     )
     enable_button.pack(side=tk.LEFT, padx=(0, 10))
 
-    # Добавляем эффект наведения
-    enable_button.bind("<Enter>", lambda e: enable_button.config(bg='#1e4a6a'))
-    enable_button.bind("<Leave>", lambda e: enable_button.config(bg='#15354D'))
-
     # Кнопка "Назад"
     cancel_button = tk.Button(
         buttons_center_frame,
@@ -258,10 +255,6 @@ def show_game_filter_warning_dialog(host: GameFilterWarningHost, protocol_mode: 
         **button_style
     )
     cancel_button.pack(side=tk.LEFT)
-
-    # Добавляем эффект наведения
-    cancel_button.bind("<Enter>", lambda e: cancel_button.config(bg='#1e4a6a'))
-    cancel_button.bind("<Leave>", lambda e: cancel_button.config(bg='#15354D'))
 
     wrap_labels: list[tk.Label] = [warning_label, final_warning, *problem_wrap_labels]
 

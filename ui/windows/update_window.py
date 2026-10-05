@@ -4,6 +4,8 @@ import threading
 from core.manager_config import VERSION_CONFIG
 from core.zapret_updater import ZapretBundleUpdater
 from ui.components.button_styler import create_hover_button
+from ui.components.material import LinearProgress, MaterialCard, TopAppBar, filled_button, text_button
+from ui.theme import theme
 from core.dpi_utils import (
     center_toplevel_on_parent,
     place_toplevel_centered_on_parent,
@@ -132,68 +134,57 @@ class UpdateWindow:
 
     def setup_window(self):
         self.root.title("Обновление")
-        self.root.configure(bg='#182030')
+        self.root.configure(bg=theme.color('surface'))
         self.root.transient(self.parent)
         safe_grab_set(self.root)
 
     def setup_ui(self):
-        main_frame = tk.Frame(self.root, bg='#182030', padx=20, pady=15)
-        main_frame.pack(fill=tk.X)
+        """Интерфейс окна обновления в стиле Material 3."""
+        main_frame = tk.Frame(self.root, bg=theme.color("surface"))
+        main_frame.pack(fill=tk.X, padx=theme.space("lg"), pady=theme.space("lg"))
 
-        tk.Label(main_frame, text="Обновление",
-                font=("Arial", 14, "bold"), fg='white', bg='#182030').pack(anchor=tk.CENTER, pady=(0, 15))
-
-        info_frame = tk.Frame(main_frame, bg='#182030')
-        info_frame.pack(fill=tk.X, pady=(0, 15))
+        self.app_bar = TopAppBar(
+            main_frame,
+            title="Обновление",
+            subtitle="Полный пакет: менеджер и служба Zapret",
+            bg_role="surface",
+        )
+        self.app_bar.pack(fill=tk.X, pady=(0, theme.space("md")))
 
         versions_text = f"Версия программы: {VERSION_CONFIG['current_version']}"
-
-        self.version_label = tk.Label(info_frame, text=versions_text,
-                                     font=("Arial", 11), fg='#5BA06A', bg='#182030',
-                                     justify=tk.LEFT)
-        self.version_label.pack(anchor=tk.W)
-
-        btn_frame = tk.Frame(main_frame, bg='#182030')
-        btn_frame.pack(fill=tk.X, pady=(0, 15))
-
-        self.action_btn = create_hover_button(
-            btn_frame,
-            text="Проверить обновления",
-            command=self.check_or_update,
-            bg='#15354D', fg='white', font=('Arial', 10),
-            width=25, bd=0, highlightthickness=0, padx=15, pady=8
+        self.version_label = tk.Label(
+            main_frame,
+            text=versions_text,
+            anchor="w",
+            **theme.text("body_medium", fg_role="success"),
         )
-        self.action_btn.pack(anchor=tk.CENTER)
+        self.version_label.pack(fill=tk.X, pady=(0, theme.space("md")))
 
-        log_frame = tk.Frame(main_frame, bg='#182030')
-        log_frame.pack(fill=tk.X)
+        self.action_btn = filled_button(main_frame, "Проверить обновления", self.check_or_update)
+        self.action_btn.pack(anchor=tk.CENTER, pady=(0, theme.space("md")))
 
-        tk.Label(log_frame, text="Лог обновлений:",
-                font=("Arial", 10), fg='white', bg='#182030').pack(anchor=tk.W, pady=(0, 5))
+        log_card = MaterialCard(main_frame, variant="elevated", title="Лог обновлений")
+        log_card.pack(fill=tk.X)
 
         self.log_text = tk.Text(
-            log_frame,
+            log_card.content,
             height=6,
             width=48,
-            bg='#15354D',
-            fg='white',
+            bg=theme.color("surface_container_lowest"),
+            fg=theme.color("on_surface"),
             wrap=tk.WORD,
-            font=("Courier", 9),
+            font=theme.font("body_small", mono=True),
             highlightthickness=0,
-            borderwidth=0
+            borderwidth=0,
+            relief=tk.FLAT,
+            padx=theme.px(8),
+            pady=theme.px(6),
         )
         self.log_text.pack(fill=tk.X)
 
-        close_frame = tk.Frame(main_frame, bg='#182030')
-        close_frame.pack(fill=tk.X, pady=(10, 0))
-
-        self.close_btn = create_hover_button(
-            close_frame,
-            text="Назад",
-            command=self.close_window,
-            bg='#15354D', fg='white', font=('Arial', 10),
-            width=15, bd=0, highlightthickness=0, padx=10, pady=5
-        )
+        close_frame = tk.Frame(main_frame, bg=theme.color("surface"))
+        close_frame.pack(fill=tk.X, pady=(theme.space("sm"), 0))
+        self.close_btn = text_button(close_frame, "Назад", self.close_window)
         self.close_btn.pack(anchor=tk.CENTER)
 
     def log_message(self, message):
@@ -283,13 +274,11 @@ class UpdateWindow:
         if self.bundle_update_available:
             self.action_btn.config(
                 text=f"Обновить до v{self.bundle_version}",
-                bg='#15354D',
                 command=self.show_update_dialog,
             )
         else:
             self.action_btn.config(
                 text="Проверить обновления",
-                bg='#15354D',
                 command=self.check_or_update,
             )
 
@@ -398,7 +387,7 @@ class UpdateProgressWindow:
         """Запускает окно прогресса"""
         self.window = tk.Toplevel(self.parent)
         self.window.title("Обновление")
-        self.window.configure(bg='#182030')
+        self.window.configure(bg=theme.color('surface'))
         self.window.transient(self.parent)
         safe_grab_set(self.window)
 
@@ -412,48 +401,39 @@ class UpdateProgressWindow:
         wait_window_safely(self.window)
 
     def setup_ui(self):
-        """Настраивает UI окна прогресса"""
-        main_frame = tk.Frame(self.window, bg='#182030', padx=10, pady=10)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        """Настраивает UI окна прогресса в стиле Material 3."""
+        main_frame = tk.Frame(self.window, bg=theme.color("surface"))
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=theme.space("lg"), pady=theme.space("lg"))
 
-        title_label = tk.Label(
+        self.app_bar = TopAppBar(
             main_frame,
-            text="Обновление компонентов",
-            font=("Arial", 16, "bold"),
-            fg='white',
-            bg='#182030'
+            title="Обновление компонентов",
+            subtitle="Не закрывайте окно до завершения",
+            bg_role="surface",
         )
-        title_label.pack(pady=(0, 20))
+        self.app_bar.pack(fill=tk.X, pady=(0, theme.space("md")))
 
         self.task_label = tk.Label(
             main_frame,
             text="Подготовка к обновлению...",
-            font=("Arial", 12),
-            fg='#0a84ff',
-            bg='#182030',
-            justify=tk.LEFT
+            anchor="w",
+            justify="left",
+            **theme.text("title_small", fg_role="primary"),
         )
-        self.task_label.pack(anchor=tk.W, pady=(0, 10))
+        self.task_label.pack(fill=tk.X, pady=(0, theme.space("sm")))
 
         self.status_label = tk.Label(
             main_frame,
             text="",
-            font=("Arial", 11),
-            fg='#AAAAAA',
-            bg='#182030',
-            justify=tk.LEFT
+            anchor="w",
+            justify="left",
+            wraplength=theme.px(420),
+            **theme.text("body_small", fg_role="on_surface_variant"),
         )
-        self.status_label.pack(anchor=tk.W, pady=(0, 5))
+        self.status_label.pack(fill=tk.X, pady=(0, theme.space("md")))
 
-        progress_container = tk.Frame(main_frame, bg='#182030')
-        progress_container.pack(fill=tk.X, pady=(15, 20))
-
-        self.progress_bar = tk.Frame(progress_container, bg='#2c2c2e', height=10)
-        self.progress_bar.pack(fill=tk.X)
-        self.progress_bar.pack_propagate(False)
-
-        self.progress_fill = tk.Frame(self.progress_bar, bg='#0a84ff', width=0)
-        self.progress_fill.pack(side=tk.LEFT, fill=tk.Y)
+        self.progress = LinearProgress(main_frame, width=350, bg_role="surface")
+        self.progress.pack(fill=tk.X)
 
     def start_update_process(self):
         """Запускает процесс обновления"""
@@ -594,18 +574,12 @@ class UpdateProgressWindow:
         print(f"    {message}")
 
     def _update_progress_bar(self, percent):
-        """Обновляет прогресс-бар"""
-        self.window.update_idletasks()
-
-        width = self.progress_bar.winfo_width()
-        if width <= 1:
-            width = 350
-
-        percent = max(0, min(100, percent))
-        fill_width = int(width * percent / 100)
-
-        self.progress_fill.config(width=fill_width)
-        self.progress_bar.update_idletasks()
+        """Обновляет линейный прогресс Material 3."""
+        try:
+            self.window.update_idletasks()
+        except tk.TclError:
+            pass
+        self.progress.set(max(0, min(100, percent)))
 
     def _show_restart_message(self):
         """Показывает сообщение о необходимости перезапуска"""

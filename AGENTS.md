@@ -19,9 +19,23 @@ bash -n zapret/system/starter.sh zapret/system/stopper.sh installer/install_zapr
 python3 tools/validate_strategies.py --dry-run     # плейсхолдеры, формат, nfqws --dry-run
 python3 tools/convert_flowseal_strategies.py --check
 ruff check core ui tools main.py                   # конфиг в pyproject.toml
+XAUTHORITY=$(ls /run/user/1000/xauth_* | head -1) python3 tools/smoke_ui_material.py  # дымовой тест всех окон
 ```
 
-CI (`.github/workflows/ci.yml`) выполняет те же шаги.
+CI (`.github/workflows/ci.yml`) выполняет те же шаги, кроме дымового теста окон.
+
+## Оформление (Material 3)
+
+- Единая тема: `ui/theme/` (`theme.color(role)`, `theme.font(role)`, `theme.text(...)`,
+  `theme.space(step)`, `theme.radius(name)`, `theme.px(dp)`); режим dark/light хранится
+  в `utils/theme.txt`, переключается в меню настроек главного окна (`MainWindow.rebuild_ui()`).
+- Компоненты: `ui/components/material/` (кнопки, карточки, switch/checkbox/radio,
+  поля, списки и таблицы, диалоги, snackbar, прогресс, top app bar, тонкий скроллбар).
+- Хардкод-цвета в окнах запрещены: цвета берутся только из ролей темы. Прежние API
+  (`create_hover_button`, `custom_messagebox`, `_font` в больших окнах) сохранены.
+- Отчёт тестера стратегий открывается окном `ui/windows/report_window.py` (данные —
+  `utils/reports/*.json`, рядом с HTML; для старых отчётов работает разбор HTML),
+  в браузер ничего не открывается автоматически.
 
 ## Архитектура (кратко)
 

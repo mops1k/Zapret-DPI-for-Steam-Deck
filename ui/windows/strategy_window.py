@@ -1,7 +1,8 @@
 import tkinter as tk
 import os
 from ui.components.custom_messagebox import show_error, show_warning
-from ui.components.button_styler import create_hover_button
+from ui.components.material import TopAppBar, filled_button, text_button
+from ui.theme import theme
 from core.service_manager import ServiceManager
 from core.game_presets import reapply_active_preset_to_config
 from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set, wait_window_safely
@@ -17,11 +18,11 @@ class StrategyWindow:
         self.selected_strategy = None
         self.strategy_items = []  # Храним названия стратегий
 
-        # Цвета
-        self.success_color = '#4CAF50'  # Зеленый для успеха и выбранных элементов
-        self.warning_color = '#FF9800'  # Оранжевый для предупреждений
-        self.error_color = '#F44336'    # Красный для ошибок
-        self.default_status_color = '#AAAAAA'  # Серый по умолчанию
+        # Цвета статуса берём из текущей темы Material 3
+        self.success_color = theme.color("success")
+        self.warning_color = theme.color("warning")
+        self.error_color = theme.color("error")
+        self.default_status_color = theme.color("on_surface_variant")
 
         # Инициализируем менеджер службы
         self.service_manager = ServiceManager()
@@ -72,26 +73,28 @@ class StrategyWindow:
 
     def setup_window_properties(self):
         """Настройка свойств окна"""
-        self.root.configure(bg='#182030')
+        self.root.configure(bg=theme.color("surface"))
         self.root.transient(self.parent)
         safe_grab_set(self.root)
 
     def setup_ui(self):
         """Настройка интерфейса"""
-        main_frame = tk.Frame(self.root, bg='#182030', padx=10, pady=10)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame = tk.Frame(self.root, bg=theme.color("surface"))
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=theme.space("lg"), pady=theme.space("lg"))
 
-        # Заголовок
-        title_label = tk.Label(main_frame, text="Выберите готовую стратегию",
-                              font=("Arial", 16, "bold"), fg='white', bg='#182030')
-        title_label.pack(pady=(5, 20))
+        self.app_bar = TopAppBar(
+            main_frame,
+            title="Выберите готовую стратегию",
+            subtitle="Отмеченные звёздочкой стратегии уже показали себя рабочими",
+            bg_role="surface",
+        )
+        self.app_bar.pack(fill=tk.X, pady=(0, theme.space("md")))
 
-        # Три колонки — как в окне выбора стратегий для теста: фреймы + строки (радио + ⭐ + имя)
-        list_frame = tk.Frame(main_frame, bg='#182030', height=250)
-        list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        list_frame = tk.Frame(main_frame, bg=theme.color("surface_container_low"))
+        list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, theme.space("md")))
 
-        columns_container = tk.Frame(list_frame, bg='#182030')
-        columns_container.pack(fill=tk.BOTH, expand=True)
+        columns_container = tk.Frame(list_frame, bg=theme.color("surface_container_low"))
+        columns_container.pack(fill=tk.BOTH, expand=True, padx=theme.space("sm"), pady=theme.space("sm"))
 
         self.radio_selected = "◉"
         self.radio_unselected = "○"
@@ -102,63 +105,31 @@ class StrategyWindow:
         self.row_widgets = {}
 
         for i in range(3):
-            column_frame = tk.Frame(columns_container, bg='#182030', padx=10)
-            column_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            column_frame = tk.Frame(columns_container, bg=theme.color("surface_container_low"))
+            column_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=theme.space("sm"))
             self.column_frames.append(column_frame)
             column_frame.bind("<Configure>", lambda e, c=i: self._on_column_configure(c, e))
 
             if i < 2:
-                separator = tk.Frame(columns_container, width=1, bg='#1E4A6E')
-                separator.pack(side=tk.LEFT, fill=tk.Y, padx=5)
+                separator = tk.Frame(columns_container, width=1, bg=theme.color("outline_variant"))
+                separator.pack(side=tk.LEFT, fill=tk.Y, padx=theme.space("xs"))
 
-        # Статусная строка
         self.status_label = tk.Label(
             main_frame,
             text="",
-            font=("Arial", 10),
-            fg=self.default_status_color,
-            bg='#182030'
+            anchor="w",
+            **theme.text("body_small", fg_role="on_surface_variant"),
         )
-        self.status_label.pack(pady=(0, 10))
+        self.status_label.pack(fill=tk.X, pady=(0, theme.space("sm")))
 
-        # Фрейм для кнопок по центру
-        buttons_frame = tk.Frame(main_frame, bg='#182030')
-        buttons_frame.pack(fill=tk.X, pady=(0, 0))
+        buttons_frame = tk.Frame(main_frame, bg=theme.color("surface"))
+        buttons_frame.pack(fill=tk.X)
 
-        # Центральный контейнер для кнопок
-        center_frame = tk.Frame(buttons_frame, bg='#182030')
-        center_frame.pack(expand=True)
+        self.apply_button = filled_button(buttons_frame, "Применить", self.apply_strategy)
+        self.apply_button.pack(side=tk.LEFT, padx=(0, theme.space("sm")))
+        self.apply_button.config(state="disabled")
 
-        # Стиль кнопок
-        button_style = {
-            'font': ('Arial', 11),
-            'bg': '#15354D',
-            'fg': 'white',
-            'bd': 0,
-            'padx': 20,
-            'pady': 8,
-            'width': 12,
-            'highlightthickness': 0,
-            'cursor': 'hand2'
-        }
-
-        # Кнопка Назад
-        self.apply_button = create_hover_button(
-            center_frame,
-            text="Применить",
-            command=self.apply_strategy,
-            **button_style
-        )
-        self.apply_button.pack(side=tk.LEFT, padx=(0, 30))
-        self.apply_button.config(state=tk.DISABLED, bg='#2a4d6a')
-
-        # Кнопка Применить
-        back_button = create_hover_button(
-            center_frame,
-            text="Назад",
-            command=self.go_back,
-            **button_style
-        )
+        back_button = text_button(buttons_frame, "Назад", self.go_back)
         back_button.pack(side=tk.LEFT)
 
     def _prefix_text(self, strategy, selected=False):
@@ -184,15 +155,15 @@ class StrategyWindow:
     def _create_strategy_row(self, col_index, strategy):
         col_frame = self.column_frames[col_index]
         self.column_strategies[col_index].append(strategy)
-        row = tk.Frame(col_frame, bg="#182030", cursor="hand2")
-        row.pack(fill=tk.X, anchor="nw", pady=1)
-        lbl_font = ("Arial", 11)
+        row = tk.Frame(col_frame, bg=theme.color("surface_container_low"), cursor="hand2")
+        row.pack(fill=tk.X, anchor="nw", pady=theme.px(1))
+        lbl_font = theme.font("body_medium")
         prefix_lbl = tk.Label(
             row,
             text=self._prefix_text(strategy, selected=False),
             font=lbl_font,
-            fg="white",
-            bg="#182030",
+            fg=theme.color("on_surface"),
+            bg=theme.color("surface_container_low"),
             anchor="nw",
         )
         prefix_lbl.pack(side=tk.LEFT, anchor="nw")
@@ -200,8 +171,8 @@ class StrategyWindow:
             row,
             text=strategy,
             font=lbl_font,
-            fg="white",
-            bg="#182030",
+            fg=theme.color("on_surface"),
+            bg=theme.color("surface_container_low"),
             justify="left",
             anchor="nw",
             wraplength=200,
@@ -222,7 +193,7 @@ class StrategyWindow:
         self.reset_radio_buttons()
         self._set_row_visual(strategy_name, selected=True)
         self.selected_strategy = strategy_name
-        self.apply_button.config(state=tk.NORMAL, bg="#15354D")
+        self.apply_button.config(state="normal")
 
     def load_current_strategy(self):
         """Загружает текущую стратегию из файла name_strategy.txt"""
@@ -255,7 +226,7 @@ class StrategyWindow:
                 self.selected_strategy = self.current_strategy
                 self.reset_radio_buttons()
                 self._set_row_visual(self.current_strategy, selected=True)
-                self.apply_button.config(state=tk.NORMAL, bg='#15354D')
+                self.apply_button.config(state="normal")
                 print(f"Подсвечена текущая стратегия: {self.current_strategy}")
         except Exception as e:
             print(f"Ошибка подсветки текущей стратегии: {e}")
@@ -278,7 +249,7 @@ class StrategyWindow:
             self.column_strategies = [[], [], []]
             self.strategy_items.clear()
             self.selected_strategy = None
-            self.apply_button.config(state=tk.DISABLED, bg='#2a4d6a')
+            self.apply_button.config(state="disabled")
 
             if os.path.exists(strategy_dir):
                 strategy_files = [f for f in os.listdir(strategy_dir)
@@ -295,11 +266,9 @@ class StrategyWindow:
                     empty_label = tk.Label(
                         self.column_frames[0],
                         text="Стратегии не найдены",
-                        font=("Arial", 11),
-                        fg="white",
-                        bg="#182030",
+                        **theme.text("body_medium", bg_role="surface_container_low"),
                     )
-                    empty_label.pack(pady=20)
+                    empty_label.pack(pady=theme.space("lg"))
                 else:
                     items_per_column = (len(self.strategy_items) + 2) // 3
 
@@ -316,11 +285,9 @@ class StrategyWindow:
             err = tk.Label(
                 self.column_frames[0],
                 text=f"Ошибка: {str(e)}",
-                font=("Arial", 11),
-                fg="#ff7043",
-                bg="#182030",
+                **theme.text("body_medium", bg_role="surface_container_low", fg_role="error"),
             )
-            err.pack(pady=20)
+            err.pack(pady=theme.space("lg"))
 
     def reset_radio_buttons(self):
         """Все строки снова с ○; звезда у рабочих — только в префиксе."""
@@ -352,7 +319,7 @@ class StrategyWindow:
 
         # Меняем состояние UI
         self.root.config(cursor="watch")
-        self.apply_button.config(state=tk.DISABLED, text="Применение...")
+        self.apply_button.config(state="disabled", text="Применение...")
         self.status_label.config(text="Применение стратегии...")
         self.root.update()
 
@@ -444,7 +411,7 @@ class StrategyWindow:
     def reset_ui_state(self):
         """Восстанавливает состояние UI"""
         self.root.config(cursor="")
-        self.apply_button.config(state=tk.NORMAL, text="Применить")
+        self.apply_button.config(state="normal", text="Применить")
         self.status_label.config(text="", fg=self.default_status_color)
 
     def close_window(self):

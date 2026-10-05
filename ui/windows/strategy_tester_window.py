@@ -6,11 +6,28 @@ import sys
 import asyncio
 import io
 from pathlib import Path
-from ui.components.button_styler import create_hover_button
+from ui.components.material import MaterialCard, MaterialRadio, TopAppBar, filled_button, outlined_button, text_button
+from ui.theme import theme
 from core.dpi_utils import place_toplevel_centered_on_parent
 
 
 from core.game_presets import reapply_active_preset_to_config
+
+#: Старые цвета лога -> роли темы Material 3.
+LOG_COLOR_ROLES = {
+    "#ff3b30": "error",
+    "#ff453a": "error",
+    "#30d158": "success",
+    "#34c759": "success",
+    "#4fc3f7": "primary",
+    "#0a84ff": "primary",
+    "#ff9500": "warning",
+    "#ffb74d": "warning",
+    "#ffd700": "primary",
+    "#8e8e93": "on_surface_variant",
+    "#aaaaaa": "on_surface_variant",
+    "white": "on_surface",
+}
 
 class OutputRedirector:
     """Перенаправляет вывод print в GUI окно"""
@@ -70,7 +87,7 @@ class StrategyTesterWindow:
 
         self.window = tk.Toplevel(self.parent)
         self.window.title("Автоподбор стратегий")
-        self.window.configure(bg='#182030')
+        self.window.configure(bg=theme.color("surface"))
 
         self.setup_ui()
         place_toplevel_centered_on_parent(
@@ -83,175 +100,81 @@ class StrategyTesterWindow:
 
 
     def setup_ui(self):
-        """Создает интерфейс окна"""
-        main_frame = tk.Frame(self.window, bg='#182030', padx=20, pady=20)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        """Создает интерфейс окна в стиле Material 3."""
+        t = theme
+        main_frame = tk.Frame(self.window, bg=t.color("surface"))
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=t.space("lg"), pady=t.space("lg"))
 
-        # Заголовок
-        title_label = tk.Label(
+        self.app_bar = TopAppBar(
             main_frame,
-            text="Автоподбор стратегий Zapret DPI",
-            font=("Arial", 16, "bold"),
-            fg='white',
-            bg='#182030'
+            title="Автоподбор стратегий",
+            subtitle="Перебор стратегий и проверка доступности целей",
+            bg_role="surface",
         )
-        title_label.pack(pady=(0, 10))
+        self.app_bar.pack(fill=tk.X, pady=(0, t.space("md")))
 
-        # Настройки тестирования
-        settings_frame = tk.LabelFrame(
-            main_frame,
-            fg='#4fc3f7',
-            bg='#182030',
-            relief=tk.FLAT,
-            bd=1,
-            highlightbackground='#2A3B5C',
-            highlightthickness=0
-        )
-        settings_frame.pack(fill=tk.X, pady=(0, 0), ipadx=10, ipady=0)
+        # --- Параметры теста ---
+        settings_card = MaterialCard(main_frame, variant="outlined", title="Параметры теста")
+        settings_card.pack(fill=tk.X, pady=(0, t.space("md")))
 
-        # Режим тестирования
-        mode_frame = tk.Frame(settings_frame, bg='#182030')
-        mode_frame.pack(fill=tk.X, pady=(5, 10))
-
+        mode_row = tk.Frame(settings_card.content, bg=t.color("surface"))
+        mode_row.pack(fill=tk.X)
         tk.Label(
-            mode_frame,
+            mode_row,
             text="Режим тестирования:",
-            font=("Arial", 10),
-            fg='white',
-            bg='#182030'
-        ).pack(side=tk.LEFT, padx=(0, 10))
+            **theme.text("body_medium", fg_role="on_surface_variant"),
+        ).pack(side=tk.LEFT, padx=(0, t.space("md")))
 
         self.mode_var = tk.StringVar(value="standard")
-
-        # Режим Стандартный
-        tk.Radiobutton(
-            mode_frame,
-            text="Стандартный",
+        MaterialRadio(
+            mode_row,
+            "Стандартный",
             variable=self.mode_var,
             value="standard",
-            font=("Arial", 10),
-            fg='white',
-            bg='#182030',
-            highlightthickness=0,
-            activebackground='#182030',
-            activeforeground='#4fc3f7',
-            selectcolor='#182030',
-            cursor='hand2'
-        ).pack(side=tk.LEFT, padx=(0, 20))
-
-        # Режим YouTube/Discord
-        tk.Radiobutton(
-            mode_frame,
-            text="YouTube/Discord",
+        ).pack(side=tk.LEFT, padx=(0, t.space("lg")))
+        MaterialRadio(
+            mode_row,
+            "YouTube/Discord",
             variable=self.mode_var,
             value="YouTube/Discord",
-            font=("Arial", 10),
-            fg='white',
-            bg='#182030',
-            highlightthickness=0,
-            activebackground='#182030',
-            activeforeground='#4fc3f7',
-            selectcolor='#182030',
-            cursor='hand2'
         ).pack(side=tk.LEFT)
 
-        # Область вывода результатов
-        results_frame = tk.Frame(main_frame, bg='#182030')
-        results_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        # --- Лог тестирования ---
+        log_card = MaterialCard(main_frame, variant="elevated", title="Лог тестирования")
+        log_card.pack(fill=tk.BOTH, expand=True, pady=(0, t.space("md")))
 
-        tk.Label(
-            results_frame,
-            text="Лог тестирования:",
-            font=("Arial", 11),
-            fg='#8e8e93',
-            bg='#182030'
-        ).pack(anchor=tk.W, pady=(0, 5))
-
-        # Текстовое поле для логов (как в connection_check_window)
         self.results_text = tk.Text(
-            results_frame,
+            log_card.content,
             height=15,
-            font=("Courier New", 9),
-            bg='#15354D',
-            fg='white',
-            insertbackground='white',
+            font=t.font("body_small", mono=True),
+            bg=t.color("surface_container_lowest"),
+            fg=t.color("on_surface"),
+            insertbackground=t.color("primary"),
             wrap=tk.WORD,
             highlightthickness=0,
-            state='disabled'
+            borderwidth=0,
+            relief=tk.FLAT,
+            padx=t.px(10),
+            pady=t.px(8),
+            state="disabled",
         )
+        self.results_text.pack(fill=tk.BOTH, expand=True)
 
-        # Размещаем элементы
-        self.results_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # --- Панель управления ---
+        control_frame = tk.Frame(main_frame, bg=t.color("surface"))
+        control_frame.pack(fill=tk.X)
 
-        # Панель управления
-        control_frame = tk.Frame(main_frame, bg='#182030')
-        control_frame.pack(fill=tk.X, pady=(0, 0))
+        self.test_button = filled_button(control_frame, "▶ Запустить тест", self.toggle_test)
+        self.test_button.pack(side=tk.LEFT, padx=(0, t.space("sm")))
 
-        # Кнопки
-        button_style = {
-            'font': ('Arial', 11),
-            'bg': '#15354D',
-            'fg': 'white',
-            'bd': 0,
-            'padx': 20,
-            'pady': 8,
-            'highlightthickness': 0,
-            'cursor': 'hand2'
-        }
+        clear_button = text_button(control_frame, "🗑 Очистить лог", self.clear_log)
+        clear_button.pack(side=tk.LEFT, padx=(0, t.space("sm")))
 
-        # Создаем левый фрейм для основных кнопок
-        left_buttons_frame = tk.Frame(control_frame, bg='#182030')
-        left_buttons_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.report_button = outlined_button(control_frame, "📄 Отчёт", self.open_report)
+        self.report_button.pack(side=tk.LEFT)
+        self.report_button.config(state="disabled")
 
-        # Создаем правый фрейм для кнопки "Назад"
-        right_buttons_frame = tk.Frame(control_frame, bg='#182030')
-        right_buttons_frame.pack(side=tk.RIGHT)
-
-        # Кнопка запуска и остановки теста (левая сторона)
-        self.test_button = create_hover_button(
-            left_buttons_frame,
-            text="▶ Запустить тест",
-            command=self.toggle_test,
-            **button_style
-        )
-        self.test_button.pack(side=tk.LEFT, padx=(0, 10))
-
-        # Кнопка очистки лога (левая сторона)
-        clear_button = create_hover_button(
-            left_buttons_frame,
-            text="🗑 Очистить лог",
-            command=self.clear_log,
-            font=('Arial', 11),  # Изменено с 10 на 11 для единого стиля
-            bg='#15354D',  # Изменено с зеленого на синий
-            fg='white',
-            bd=0,
-            padx=15,
-            pady=8  # Высота 20px
-        )
-        clear_button.pack(side=tk.LEFT, padx=(0, 10))
-
-        # Кнопка открытия отчета (левая сторона)
-        self.report_button = create_hover_button(
-            left_buttons_frame,
-            text="📄 Отчет",
-            command=self.open_report,
-            font=('Arial', 11),  # Изменено с 10 на 11
-            bg='#15354D',  # Изменено с зеленого на синий
-            fg='white',
-            bd=0,
-            padx=15,
-            pady=8  # Высота 20px
-        )
-        self.report_button.pack(side=tk.LEFT, padx=(0, 10))
-        self.report_button.config(state=tk.DISABLED)
-
-        # Кнопка назад (правая сторона)
-        back_button = create_hover_button(
-            right_buttons_frame,
-            text="Назад",
-            command=self.on_close,
-            **button_style
-        )
+        back_button = text_button(control_frame, "Назад", self.on_close)
         back_button.pack(side=tk.RIGHT)
 
     def toggle_test(self):
@@ -269,6 +192,10 @@ class StrategyTesterWindow:
         except (tk.TclError, RuntimeError):
             pass
 
+    def _resolve_log_color(self, color) -> str:
+        """Переводит прежний hex-цвет лога в цвет текущей темы."""
+        return theme.color(LOG_COLOR_ROLES.get(str(color).strip().lower(), "on_surface"))
+
     def log_message(self, message, color='white'):
         """Добавляет сообщение в область вывода (безопасно для потоков)"""
         self._safe_after(self._log_message_thread_safe, message, color)
@@ -280,16 +207,15 @@ class StrategyTesterWindow:
         # Вставляем сообщение
         self.results_text.insert(tk.END, f"{message}\n")
 
-        # Применяем цвет через теги
-        if color != 'white':
-            # Вычисляем позиции для тега
+        # Применяем цвет через теги (цвет берём из темы)
+        resolved = self._resolve_log_color(color)
+        if resolved != theme.color("on_surface"):
             start_index = self.results_text.index(f"end-{len(message)+2}c")
             end_index = self.results_text.index("end-1c")
 
-            # Создаем уникальное имя тега
-            tag_name = f"color_{color.replace('#', '')}"
+            tag_name = f"color_{resolved.replace('#', '')}"
             self.results_text.tag_add(tag_name, start_index, end_index)
-            self.results_text.tag_config(tag_name, foreground=color)
+            self.results_text.tag_config(tag_name, foreground=resolved)
 
         # Прокручиваем вниз
         self.results_text.see(tk.END)
@@ -674,26 +600,23 @@ class StrategyTesterWindow:
         # Кнопка запуска теперь всегда активна
 
     def open_report(self):
-        """Открывает последний отчет"""
+        """Открывает последний отчёт в собственном окне приложения."""
         try:
             reports_dir = self.project_root / "utils" / "reports"
             if not reports_dir.exists():
                 self.log_message("❌ Папка отчетов не найдена", "#ff3b30")
                 return
 
-            # Ищем последний HTML файл
             html_files = list(reports_dir.glob("*.html"))
             if not html_files:
                 self.log_message("❌ Отчеты не найдены", "#ff3b30")
                 return
 
-            # Сортируем по времени изменения
             latest_report = max(html_files, key=lambda x: x.stat().st_mtime)
 
-            # Открываем в браузере
-            import webbrowser
-            webbrowser.open(f"file://{latest_report}")
+            from ui.windows.report_window import ReportWindow
 
+            ReportWindow(self.window, latest_report).run()
             self.log_message(f"📄 Открываю отчет: {latest_report.name}", "#30d158")
 
         except Exception as e:

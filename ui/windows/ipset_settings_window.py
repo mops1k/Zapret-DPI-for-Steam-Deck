@@ -8,6 +8,7 @@ import shutil
 from ui.components.custom_messagebox import show_info
 from core.dpi_utils import application_tk_root, place_toplevel_centered_on_parent, wait_window_safely
 from core.tk_scale_lab_helpers import logical_ui_scale, warning_dialog_scale
+from ui.theme import theme
 
 
 class IpsetSettingsWindow:
@@ -188,11 +189,14 @@ class IpsetSettingsWindow:
         return max(1, int(round(float(px) * f)))
 
     def _font(self, family, size, weight=None):
+        """Шрифт темы с учётом logical_ui_scale."""
         f = float(getattr(self, "_logical_scale", 1.0))
         s = max(8, int(round(float(size) * f)))
+        kind = "mono" if "courier" in str(family).lower() else "sans"
+        family_name = theme.family(kind)
         if weight:
-            return (family, s, weight)
-        return (family, s)
+            return (family_name, s, weight)
+        return (family_name, s)
 
     def _clamped_fixed_geometry_wh(self, anchor=None):
         anchor = anchor or self._anchor_root()
@@ -239,14 +243,14 @@ class IpsetSettingsWindow:
 
     def create_text_tab(self, parent, tab_name, description, file_name):
         """Создает вкладку с текстовым полем для ввода IP-адресов"""
-        frame = tk.Frame(parent, bg='#182030')
+        frame = tk.Frame(parent, bg=theme.color('surface'))
 
         info = tk.Label(
             frame,
             text=description,
             font=self._font("Arial", 10),
-            fg='#8e8e93',
-            bg='#182030',
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface'),
             justify=tk.LEFT,
             anchor=tk.NW,
             wraplength=self._s(260),
@@ -263,7 +267,7 @@ class IpsetSettingsWindow:
         frame.bind("<Configure>", lambda _e: _sync_tab_desc_wrap())
         frame.after_idle(_sync_tab_desc_wrap)
 
-        text_frame = tk.Frame(frame, bg='#182030')
+        text_frame = tk.Frame(frame, bg=theme.color('surface'))
         text_frame.grid(row=1, column=0, sticky="nsew", pady=(0, self._s(6)))
         frame.grid_rowconfigure(1, weight=1)
         frame.grid_columnconfigure(0, weight=1)
@@ -272,12 +276,12 @@ class IpsetSettingsWindow:
             text_frame,
             text="Введите IP-адреса:",
             font=self._font("Arial", 11),
-            fg='#0a84ff',
-            bg='#182030',
+            fg=theme.color('primary'),
+            bg=theme.color('surface'),
         )
         text_label.grid(row=0, column=0, sticky="w", pady=(0, self._s(4)))
 
-        text_container = tk.Frame(text_frame, bg='#182030')
+        text_container = tk.Frame(text_frame, bg=theme.color('surface'))
         text_container.grid(row=1, column=0, sticky="nsew")
         text_frame.grid_rowconfigure(1, weight=1)
         text_frame.grid_columnconfigure(0, weight=1)
@@ -291,9 +295,9 @@ class IpsetSettingsWindow:
         text_input = tk.Text(
             text_container,
             font=self._font("Courier New", 10),
-            bg='#1a1a2e',
-            fg='#ffffff',
-            insertbackground='white',
+            bg=theme.color('surface_container_lowest'),
+            fg=theme.color('on_surface'),
+            insertbackground=theme.color('primary'),
             wrap=tk.NONE,
             height=_text_lines,
         )
@@ -308,7 +312,7 @@ class IpsetSettingsWindow:
         """Создает окно добавления пользовательских IP-адресов"""
         self.window = tk.Toplevel(self.parent)
         self.window.title("Добавление пользовательских IP-адресов")
-        self.window.configure(bg='#182030')
+        self.window.configure(bg=theme.color('surface'))
         self.window.resizable(True, True)
 
         anchor = self._anchor_root()
@@ -316,13 +320,13 @@ class IpsetSettingsWindow:
         self._logical_scale = float(logical_ui_scale(anchor))
 
         _tw, _th = self._clamped_fixed_geometry_wh(anchor)
-        shell = tk.Frame(self.window, bg="#182030", width=_tw, height=_th)
+        shell = tk.Frame(self.window, bg=theme.color("surface"), width=_tw, height=_th)
         shell.pack_propagate(False)
         shell.pack()
         self._ip_shell_frame = shell
 
         # Внешние отступы — внутри shell; propagate=False не даёт Toplevel раздуваться под reqheight > clamp
-        main_frame = tk.Frame(shell, bg='#182030', padx=self._s(12))
+        main_frame = tk.Frame(shell, bg=theme.color('surface'), padx=self._s(12))
         main_frame.pack(
             fill=tk.BOTH,
             expand=True,
@@ -334,13 +338,13 @@ class IpsetSettingsWindow:
             main_frame,
             text="Добавление пользовательских IP-адресов",
             font=self._font("Arial", 14, "bold"),
-            fg='white',
-            bg='#182030',
+            fg=theme.color('on_surface'),
+            bg=theme.color('surface'),
         )
         title_label.grid(row=0, column=0, pady=(0, self._s(10)))
         self._ip_title_label = title_label
 
-        info_frame = tk.Frame(main_frame, bg='#182030')
+        info_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         info_frame.grid(row=1, column=0, sticky="ew", pady=(0, self._s(8)))
 
         info_body = (
@@ -353,8 +357,8 @@ class IpsetSettingsWindow:
             info_frame,
             text=info_body,
             font=self._font("Arial", 10),
-            fg='#8e8e93',
-            bg='#182030',
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface'),
             justify=tk.LEFT,
             anchor=tk.NW,
             wraplength=self._s(260),
@@ -372,24 +376,7 @@ class IpsetSettingsWindow:
         info_frame.bind("<Configure>", lambda _e: _sync_ip_hints_wrap())
         info_frame.after_idle(_sync_ip_hints_wrap)
 
-        self._ip_nb_style = "IpsetUser.TNotebook"
-        style = ttk.Style()
-        style.theme_use('default')
-        style.configure(self._ip_nb_style, background='#182030', borderwidth=0)
-        style.configure(
-            f"{self._ip_nb_style}.Tab",
-            background='#1a1a2e',
-            foreground='#8e8e93',
-            padding=[self._s(8), self._s(4)],
-            font=self._font('Arial', 10),
-        )
-        style.map(
-            f"{self._ip_nb_style}.Tab",
-            background=[('selected', '#0a84ff')],
-            foreground=[('selected', 'white')],
-        )
-
-        notebook = ttk.Notebook(main_frame, style=self._ip_nb_style)
+        notebook = ttk.Notebook(main_frame)
         notebook.grid(row=2, column=0, sticky="nsew", pady=(0, self._s(6)))
         main_frame.grid_rowconfigure(2, weight=1)
         main_frame.grid_columnconfigure(0, weight=1)  # растяжение по ширине окна
@@ -411,17 +398,17 @@ class IpsetSettingsWindow:
         notebook.add(unblocked_frame, text="Незаблокированный")
         self._ip_tab_refs = (br, ur)
 
-        buttons_frame = tk.Frame(main_frame, bg='#182030')
+        buttons_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         buttons_frame.grid(row=3, column=0, sticky="ew", pady=(0, self._s(10)))
         self._ip_buttons_frame = buttons_frame
 
-        buttons_center_frame = tk.Frame(buttons_frame, bg='#182030')
+        buttons_center_frame = tk.Frame(buttons_frame, bg=theme.color('surface'))
         buttons_center_frame.pack()
 
         button_style = {
             'font': self._font('Arial', 11),
-            'bg': '#15354D',
-            'fg': 'white',
+            'bg': theme.color('secondary_container'),
+            'fg': theme.color('on_surface'),
             'bd': 0,
             'padx': self._s(18),
             'pady': self._s(8),
@@ -450,8 +437,8 @@ class IpsetSettingsWindow:
             main_frame,
             text="",
             font=self._font("Arial", 10),
-            fg='#AAAAAA',
-            bg='#182030'
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface')
         )
         self.status_message.grid(row=4, column=0, sticky="ew", pady=(self._s(3), 0))
         self.status_message.grid_remove()
@@ -514,13 +501,13 @@ class IpsetSettingsWindow:
         self.status_message.config(text=message)
 
         if success:
-            self.status_message.config(fg='#30d158')  # Зеленый
+            self.status_message.config(fg=theme.color('success'))  # Зеленый
         elif warning:
-            self.status_message.config(fg='#ff9500')  # Оранжевый
+            self.status_message.config(fg=theme.color('warning'))  # Оранжевый
         elif error:
-            self.status_message.config(fg='#ff3b30')  # Красный
+            self.status_message.config(fg=theme.color('error'))  # Красный
         else:
-            self.status_message.config(fg='#AAAAAA')  # Серый
+            self.status_message.config(fg=theme.color('on_surface_variant'))  # Серый
 
         try:
             self.status_message.grid(row=4, column=0, sticky="ew", pady=(self._s(3), 0))
@@ -683,31 +670,31 @@ class IpsetFilterWindow:
         """Создает окно настройки IPSet Filter"""
         self.window = tk.Toplevel(self.parent)
         self.window.title("Настройка IPSet Filter")
-        self.window.configure(bg='#182030')
+        self.window.configure(bg=theme.color('surface'))
 
         # Основной фрейм
-        main_frame = tk.Frame(self.window, bg='#182030', padx=10, pady=10)
+        main_frame = tk.Frame(self.window, bg=theme.color('surface'), padx=10, pady=10)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # Заголовок
         title_label = tk.Label(main_frame,
                                text="Настройка IPSet Filter",
-                               font=("Arial", 14, "bold"),
-                               fg='white',
-                               bg='#182030')
+                               font=theme.font('title_large'),
+                               fg=theme.color('on_surface'),
+                               bg=theme.color('surface'))
         title_label.pack(anchor=tk.CENTER, pady=(0, 15))
 
         # Примечание
-        note_frame = tk.Frame(main_frame, bg='#182030')
+        note_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         note_frame.pack(fill=tk.X, pady=(0, 10))
 
         note_text = "Данная настройка полезна, если не работает ресурс, который без Zapret работает"
         note_label = tk.Label(
             note_frame,
             text=note_text,
-            font=("Arial", 10),
-            fg='#ff9500',  # Оранжевый цвет для выделения
-            bg='#182030',
+            font=theme.font('body_small'),
+            fg=theme.color('warning'),  # Оранжевый цвет для выделения
+            bg=theme.color('surface'),
             justify=tk.CENTER,
             wraplength=400,
         )
@@ -724,102 +711,102 @@ class IpsetFilterWindow:
         self.window.after_idle(_sync_note_wrap)
 
         # Фрейм для радиокнопок
-        radio_frame = tk.Frame(main_frame, bg='#182030')
+        radio_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         radio_frame.pack(fill=tk.X, pady=(0, 10))
 
         # Заголовок для радиокнопок
         radio_title = tk.Label(radio_frame,
                               text="Текущие статусы:",
-                              font=("Arial", 11, "bold"),
-                              fg='#0a84ff',
-                              bg='#182030')
+                              font=theme.font('title_small'),
+                              fg=theme.color('primary'),
+                              bg=theme.color('surface'))
         radio_title.pack(anchor=tk.W, pady=(0, 10))
 
         # Радиокнопка none
-        none_frame = tk.Frame(radio_frame, bg='#182030')
+        none_frame = tk.Frame(radio_frame, bg=theme.color('surface'))
         none_frame.pack(fill=tk.X, pady=(0, 8))
 
         none_radio = tk.Radiobutton(none_frame,
                                    text="none",
                                    variable=self.filter_mode,
                                    value="none",
-                                   font=("Arial", 11),
-                                   fg='white',
-                                   bg='#182030',
-                                   selectcolor='#182030',
-                                   activebackground='#182030',
-                                   activeforeground='white',
+                                   font=theme.font('body_medium'),
+                                   fg=theme.color('on_surface'),
+                                   bg=theme.color('surface'),
+                                   selectcolor=theme.color('surface'),
+                                   activebackground=theme.color('surface_container_high'),
+                                   activeforeground=theme.color('primary'),
                                    highlightthickness=0)
         none_radio.pack(side=tk.LEFT)
 
         none_desc = tk.Label(none_frame,
                             text="    - никакие айпи не попадают под проверку",
-                            font=("Arial", 10),
-                            fg='#8e8e93',
-                            bg='#182030')
+                            font=theme.font('body_small'),
+                            fg=theme.color('on_surface_variant'),
+                            bg=theme.color('surface'))
         none_desc.pack(side=tk.LEFT, padx=(10, 0))
 
         # Радиокнопка loaded
-        loaded_frame = tk.Frame(radio_frame, bg='#182030')
+        loaded_frame = tk.Frame(radio_frame, bg=theme.color('surface'))
         loaded_frame.pack(fill=tk.X, pady=(0, 8))
 
         loaded_radio = tk.Radiobutton(loaded_frame,
                                      text="loaded",
                                      variable=self.filter_mode,
                                      value="loaded",
-                                     font=("Arial", 11),
-                                     fg='white',
-                                     bg='#182030',
-                                     selectcolor='#182030',
-                                     activebackground='#182030',
-                                     activeforeground='white',
+                                     font=theme.font('body_medium'),
+                                     fg=theme.color('on_surface'),
+                                     bg=theme.color('surface'),
+                                     selectcolor=theme.color('surface'),
+                                     activebackground=theme.color('surface_container_high'),
+                                     activeforeground=theme.color('primary'),
                                      highlightthickness=0)
         loaded_radio.pack(side=tk.LEFT)
 
         loaded_desc = tk.Label(loaded_frame,
                               text="- айпи проверяется на вхождение в список",
-                              font=("Arial", 10),
-                              fg='#8e8e93',
-                              bg='#182030')
+                              font=theme.font('body_small'),
+                              fg=theme.color('on_surface_variant'),
+                              bg=theme.color('surface'))
         loaded_desc.pack(side=tk.LEFT, padx=(10, 0))
 
         # Радиокнопка any
-        any_frame = tk.Frame(radio_frame, bg='#182030')
+        any_frame = tk.Frame(radio_frame, bg=theme.color('surface'))
         any_frame.pack(fill=tk.X, pady=(0, 8))
 
         any_radio = tk.Radiobutton(any_frame,
                                   text="any",
                                   variable=self.filter_mode,
                                   value="any",
-                                  font=("Arial", 11),
-                                  fg='white',
-                                  bg='#182030',
-                                  selectcolor='#182030',
-                                  activebackground='#182030',
-                                  activeforeground='white',
+                                  font=theme.font('body_medium'),
+                                  fg=theme.color('on_surface'),
+                                  bg=theme.color('surface'),
+                                  selectcolor=theme.color('surface'),
+                                  activebackground=theme.color('surface_container_high'),
+                                  activeforeground=theme.color('primary'),
                                   highlightthickness=0)
         any_radio.pack(side=tk.LEFT)
 
         any_desc = tk.Label(any_frame,
                            text="       - любой айпи попадает под фильтр",
-                           font=("Arial", 10),
-                           fg='#8e8e93',
-                           bg='#182030')
+                           font=theme.font('body_small'),
+                           fg=theme.color('on_surface_variant'),
+                           bg=theme.color('surface'))
         any_desc.pack(side=tk.LEFT, padx=(10, 0))
 
         # Фрейм для кнопок
-        buttons_frame = tk.Frame(main_frame, bg='#182030')
+        buttons_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         buttons_frame.pack(fill=tk.X, pady=(5, 0))
 
         # Контейнер для центрирования кнопок
-        buttons_center_frame = tk.Frame(buttons_frame, bg='#182030')
+        buttons_center_frame = tk.Frame(buttons_frame, bg=theme.color('surface'))
         buttons_center_frame.pack()
 
         # Стиль кнопок
         button_style = {
-            'font': ('Arial', 11),
-            'bg': '#15354D',
-            'fg': 'white',
+            'font': theme.font('label_large'),
+            'bg': theme.color('secondary_container'),
+            'fg': theme.color('on_surface'),
             'bd': 0,
             'padx': 10,
             'pady': 8,
@@ -850,9 +837,9 @@ class IpsetFilterWindow:
         self.status_message = tk.Label(
             main_frame,
             text="",
-            font=("Arial", 10),
-            fg='#AAAAAA',
-            bg='#182030',
+            font=theme.font('body_small'),
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface'),
             height=1
         )
         self.status_message.pack(fill=tk.X, pady=(15, 0))
@@ -879,13 +866,13 @@ class IpsetFilterWindow:
         self.status_message.config(text=message)
 
         if success:
-            self.status_message.config(fg='#30d158')  # Зеленый
+            self.status_message.config(fg=theme.color('success'))  # Зеленый
         elif warning:
-            self.status_message.config(fg='#ff9500')  # Оранжевый
+            self.status_message.config(fg=theme.color('warning'))  # Оранжевый
         elif error:
-            self.status_message.config(fg='#ff3b30')  # Красный
+            self.status_message.config(fg=theme.color('error'))  # Красный
         else:
-            self.status_message.config(fg='#AAAAAA')  # Серый
+            self.status_message.config(fg=theme.color('on_surface_variant'))  # Серый
 
         # Автоматически очищаем сообщение через 3 секунды (кроме ошибок)
         if message and not error:
@@ -931,29 +918,29 @@ class IpsetMainWindow:
         """Создает главное окно выбора настроек IPSet"""
         self.window = tk.Toplevel(self.parent)
         self.window.title("Настройки IPSet")
-        self.window.configure(bg='#182030')
+        self.window.configure(bg=theme.color('surface'))
 
         # Основной фрейм
-        main_frame = tk.Frame(self.window, bg='#182030', padx=10, pady=10)
+        main_frame = tk.Frame(self.window, bg=theme.color('surface'), padx=10, pady=10)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # Заголовок
         title_label = tk.Label(main_frame,
                                text="Настройки IPSet",
-                               font=("Arial", 14, "bold"),
-                               fg='white',
-                               bg='#182030')
+                               font=theme.font('title_large'),
+                               fg=theme.color('on_surface'),
+                               bg=theme.color('surface'))
         title_label.pack(anchor=tk.CENTER, pady=(0, 30))
 
         # Фрейм для кнопок
-        buttons_frame = tk.Frame(main_frame, bg='#182030')
+        buttons_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         buttons_frame.pack(fill=tk.BOTH, expand=True)
 
         # Стиль кнопок
         button_style = {
-            'font': ('Arial', 11),
-            'bg': '#15354D',
-            'fg': 'white',
+            'font': theme.font('label_large'),
+            'bg': theme.color('secondary_container'),
+            'fg': theme.color('on_surface'),
             'bd': 0,
             'padx': 10,
             'pady': 8,
@@ -983,7 +970,7 @@ class IpsetMainWindow:
         # Кнопка "Назад"
         back_button_style = button_style.copy()
         back_button_style['width'] = 20
-        back_button_style['font'] = ('Arial', 11)
+        back_button_style['font'] = theme.font('label_large')
 
         back_button = self.create_hover_button(
             buttons_frame,

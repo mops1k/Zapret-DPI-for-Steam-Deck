@@ -3,12 +3,13 @@ import os
 import tkinter as tk
 
 from core.dpi_utils import center_toplevel_on_screen, fit_toplevel_to_content
+from ui.theme import theme
 
 
 class MainChromeMixin:
     def setup_window_properties(self):
         """Настройка свойств окна"""
-        self.root.configure(bg='#182030')
+        self.root.configure(bg=theme.color("surface"))
 
         # Устанавливаем WM_CLASS
         try:
@@ -33,8 +34,8 @@ class MainChromeMixin:
         """Размер и minsize по содержимому, чтобы UI не обрезался при высоком DPI."""
         fit_toplevel_to_content(
             self.root,
-            min_width=320,
-            min_height=200,
+            min_width=520,
+            min_height=420,
             margin_width=8,
             margin_height=12,
         )

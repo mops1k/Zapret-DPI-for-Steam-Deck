@@ -7,9 +7,20 @@ import time
 import socket
 import http.client
 import ssl
-from ui.components.button_styler import create_hover_button
+from ui.components.material import MaterialCard, TopAppBar, filled_button, text_button
+from ui.theme import theme
 from core.dpi_utils import place_toplevel_centered_on_parent
 import os
+
+#: Старые цвета лога -> роли темы Material 3.
+LOG_COLOR_ROLES = {
+    "#0a84ff": "primary",
+    "#30d158": "success",
+    "#ff9500": "warning",
+    "#ff3b30": "error",
+    "#aaaaaa": "on_surface_variant",
+    "white": "on_surface",
+}
 
 class ConnectionCheckWindow:
     def __init__(self, parent):
@@ -24,7 +35,7 @@ class ConnectionCheckWindow:
         """Запускает окно проверки соединения"""
         self.window = tk.Toplevel(self.parent)
         self.window.title("Проверка соединения")
-        self.window.configure(bg='#182030')
+        self.window.configure(bg=theme.color("surface"))
 
         self.setup_ui()
         place_toplevel_centered_on_parent(
@@ -35,79 +46,46 @@ class ConnectionCheckWindow:
         self.window.mainloop()
 
     def setup_ui(self):
-        """Создает интерфейс окна"""
-        main_frame = tk.Frame(self.window, bg='#182030', padx=20, pady=20)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        """Создает интерфейс окна в стиле Material 3."""
+        main_frame = tk.Frame(self.window, bg=theme.color("surface"))
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=theme.space("lg"), pady=theme.space("lg"))
 
-        # Заголовок
-        title_label = tk.Label(
+        self.app_bar = TopAppBar(
             main_frame,
-            text="Проверка сетевого соединения",
-            font=("Arial", 16, "bold"),
-            fg='white',
-            bg='#182030'
+            title="Проверка сетевого соединения",
+            subtitle="Шлюз, интернет, YouTube и Discord",
+            bg_role="surface",
         )
-        title_label.pack(pady=(0, 20))
+        self.app_bar.pack(fill=tk.X, pady=(0, theme.space("md")))
 
-        # Область вывода результатов
-        results_frame = tk.Frame(main_frame, bg='#182030')
-        results_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+        results_card = MaterialCard(main_frame, variant="elevated", title="Результаты проверки")
+        results_card.pack(fill=tk.BOTH, expand=True, pady=(0, theme.space("md")))
 
-        tk.Label(
-            results_frame,
-            text="Результаты проверки:",
-            font=("Arial", 11),
-            fg='#8e8e93',
-            bg='#182030'
-        ).pack(anchor=tk.W, pady=(0, 5))
-
-        # Создаем ScrolledText для вывода
         self.results_text = tk.Text(
-            results_frame,
+            results_card.content,
             height=15,
             width=70,
-            font=("Courier New", 10),
-            bg='#15354D',
-            fg='white',
-            insertbackground='white',
+            font=theme.font("body_small", mono=True),
+            bg=theme.color("surface_container_lowest"),
+            fg=theme.color("on_surface"),
+            insertbackground=theme.color("primary"),
             wrap=tk.WORD,
             highlightthickness=0,
-            state='disabled'
+            borderwidth=0,
+            relief=tk.FLAT,
+            padx=theme.px(10),
+            pady=theme.px(8),
+            state='disabled',
         )
         self.results_text.pack(fill=tk.BOTH, expand=True)
 
-        # Панель управления
-        control_frame = tk.Frame(main_frame, bg='#182030')
-        control_frame.pack(fill=tk.X, pady=(0, 0))
+        control_frame = tk.Frame(main_frame, bg=theme.color("surface"))
+        control_frame.pack(fill=tk.X)
 
-        # Кнопки
-        button_style = {
-            'font': ('Arial', 11),
-            'bg': '#15354D',
-            'fg': 'white',
-            'bd': 0,
-            'padx': 20,
-            'pady': 8,
-            'highlightthickness': 0,
-            'cursor': 'hand2'
-        }
+        self.toggle_button = filled_button(control_frame, "Запустить проверку", self.toggle_check)
+        self.toggle_button.pack(side=tk.LEFT, padx=(0, theme.space("sm")))
 
-        # Динамическая кнопка Запустить/Остановить
-        self.toggle_button = create_hover_button(
-            control_frame,
-            text="Запустить проверку",
-            command=self.toggle_check,
-            **button_style
-        )
-        self.toggle_button.pack(side=tk.LEFT, padx=(0, 10))
-
-        # Кнопка назад
-        self.back_button = create_hover_button(
-            control_frame,
-            text="Назад",
-            command=self.on_close,
-            **button_style
-        )
+        self.back_button = text_button(control_frame, "Назад", self.on_close)
         self.back_button.pack(side=tk.RIGHT)
 
     def toggle_check(self):
@@ -126,7 +104,7 @@ class ConnectionCheckWindow:
         self.results = []
 
         # Обновляем текст кнопки
-        self.toggle_button.config(text="Остановить проверку", bg='#15354D')
+        self.toggle_button.config(text="Остановить проверку")
 
         # Очищаем результаты перед началом проверки
         self.clear_results()
@@ -169,12 +147,13 @@ class ConnectionCheckWindow:
             self.results_text.config(state='normal')
             self.results_text.insert(tk.END, f"{message}\n")
 
-            # Применяем цвет через теги
-            if color != 'white':
+            # Применяем цвет через теги (цвет берём из текущей темы)
+            resolved = theme.color(LOG_COLOR_ROLES.get(str(color).strip().lower(), "on_surface"))
+            if resolved != theme.color("on_surface"):
                 start_index = self.results_text.index(f"end-{len(message)+2}c")  # +2 для символов \n
                 end_index = self.results_text.index("end-1c")
-                self.results_text.tag_add(color, start_index, end_index)
-                self.results_text.tag_config(color, foreground=color)
+                self.results_text.tag_add(resolved, start_index, end_index)
+                self.results_text.tag_config(resolved, foreground=resolved)
 
             self.results_text.see(tk.END)
             self.results_text.config(state='disabled')
@@ -191,7 +170,7 @@ class ConnectionCheckWindow:
 
     def _update_button_to_start(self):
         """Обновляет кнопку в состояние 'Запустить'"""
-        self.toggle_button.config(text="Запустить проверку", bg='#15354D')
+        self.toggle_button.config(text="Запустить проверку")
 
     def clear_results(self):
         """Очищает область результатов"""
@@ -753,7 +732,7 @@ class ConnectionCheckWindow:
         """Вызывается при завершении проверки"""
         self.checking = False
         # Обновляем кнопку обратно в состояние "Запустить проверку"
-        self.toggle_button.config(text="Запустить проверку", bg='#15354D')
+        self.toggle_button.config(text="Запустить проверку")
 
         sum(1 for _, _, success in self.results if success)
         len(self.results)

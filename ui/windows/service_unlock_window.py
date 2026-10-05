@@ -13,6 +13,7 @@ from core.dpi_utils import (
     wait_window_safely,
 )
 from core.tk_scale_lab_helpers import logical_ui_scale, warning_dialog_scale
+from ui.theme import theme
 
 class ServiceUnlockWindow:
     def __init__(self, parent):
@@ -112,19 +113,22 @@ class ServiceUnlockWindow:
         # иначе при 125%/150% двойной рост: Tk уже масштабирует DPI + мы умножали pt на 1.25/1.5.
         f = float(getattr(self, "_logical_scale", 1.0))
         s = max(8, int(round(float(size) * f)))
+        kind = "mono" if "courier" in str(family).lower() else "sans"
+        family_name = theme.family(kind)
         if weight:
-            return (family, s, weight)
-        return (family, s)
+            return (family_name, s, weight)
+        return (family_name, s)
 
     def create_main_category_frame(self, parent, category_name, category_content):
         """Создает фрейм для основной категории"""
-        frame = tk.Frame(parent, bg='#182030', padx=10, pady=0)
+        frame = tk.Frame(parent, bg=theme.color('surface'), padx=10, pady=0)
 
-        # Проверяем, является ли категория "Другое" (без вложенных списков)
-        is_other_category = category_name in ["Другое", "Discord"]
+        # Категории с плоским списком доменов (без вложенных сервисов).
+        # Notion тоже плоская: раньше окно падало на list(str.keys()).
+        is_other_category = category_name in ["Другое", "Discord", "Notion"]
 
         # Фрейм для заголовка и чекбокса категории
-        header_frame = tk.Frame(frame, bg='#182030')
+        header_frame = tk.Frame(frame, bg=theme.color('surface'))
         header_frame.pack(fill=tk.X, pady=(0, 0))
 
         # Подсчитываем сколько доменов уже выбрано для всей категории
@@ -136,7 +140,7 @@ class ServiceUnlockWindow:
                 header_frame,
                 text="",
                 font=self._font("Arial", 10),
-                bg='#182030',
+                bg=theme.color('surface'),
                 width=1
             )
             spacer.pack(side=tk.LEFT, padx=(0, 8))
@@ -155,15 +159,15 @@ class ServiceUnlockWindow:
         # Только для НЕ "Другое" создаем кнопку раскрытия
         if not is_other_category:
             # Фрейм для содержимого (изначально скрыт)
-            content_frame = tk.Frame(frame, bg='#182030')
+            content_frame = tk.Frame(frame, bg=theme.color('surface'))
 
             # Кнопка для раскрытия/скрытия содержимого
             toggle_button = tk.Label(
                 header_frame,
                 text="▼",
                 font=self._font("Arial", 10),
-                fg='#8e8e93',
-                bg='#182030',
+                fg=theme.color('on_surface_variant'),
+                bg=theme.color('surface'),
                 cursor='hand2',
                 width=1
             )
@@ -176,11 +180,11 @@ class ServiceUnlockWindow:
             text=category_name,
             variable=category_var,
             font=self._font("Arial", 12, "bold"),
-            fg='#0a84ff',
-            bg='#182030',
-            selectcolor='#182030',
-            activebackground='#182030',
-            activeforeground='#0a84ff',
+            fg=theme.color('primary'),
+            bg=theme.color('surface'),
+            selectcolor=theme.color('surface'),
+            activebackground=theme.color('surface_container_high'),
+            activeforeground=theme.color('primary'),
             highlightthickness=0,
             command=lambda: self.toggle_category_content(category_name, is_other_category, category_content),
             cursor='hand2'
@@ -192,8 +196,8 @@ class ServiceUnlockWindow:
             header_frame,
             text=f"({selected_count}/{total_count})",
             font=self._font("Arial", 10),
-            fg='#8e8e93',
-            bg='#182030'
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface')
         )
         count_label.pack(side=tk.LEFT, padx=(5, 0))
 
@@ -229,7 +233,7 @@ class ServiceUnlockWindow:
 
     def create_subcategory_checkbox(self, parent, category_name, subcategory_name, domains_dict):
         """Создает чекбокс для подкатегории (сервиса)"""
-        frame = tk.Frame(parent, bg='#182030')
+        frame = tk.Frame(parent, bg=theme.color('surface'))
 
         domains = list(domains_dict.keys())
         selected_count = sum(1 for domain in domains if domain in self.existing_entries)
@@ -247,11 +251,11 @@ class ServiceUnlockWindow:
             text=subcategory_name,
             variable=subcategory_var,
             font=self._font("Arial", 11),
-            fg='#34c759',
-            bg='#182030',
-            selectcolor='#182030',
-            activebackground='#182030',
-            activeforeground='#34c759',
+            fg=theme.color('success'),
+            bg=theme.color('surface'),
+            selectcolor=theme.color('surface'),
+            activebackground=theme.color('surface_container_high'),
+            activeforeground=theme.color('success'),
             highlightthickness=0,
             command=lambda: self.update_category_count(category_name, subcategory_name),
             cursor='hand2'
@@ -263,8 +267,8 @@ class ServiceUnlockWindow:
             frame,
             text=f"({selected_count}/{total_count})",
             font=self._font("Arial", 9),
-            fg='#8e8e93',
-            bg='#182030'
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface')
         )
         sub_count_label.pack(side=tk.LEFT, padx=(5, 0))
 
@@ -579,7 +583,7 @@ class ServiceUnlockWindow:
         self._logical_scale = logical_ui_scale(self.parent)
         self.window = tk.Toplevel(self.parent)
         self.window.title("Разблокировка сервисов")
-        self.window.configure(bg='#182030')
+        self.window.configure(bg=theme.color('surface'))
         try:
             self.window.wm_overrideredirect(False)
             # -toolwindow на Linux/Steam часто мешает перетаскиванию и даёт «прилипание» к краю.
@@ -587,15 +591,15 @@ class ServiceUnlockWindow:
             pass
 
         # Основной фрейм — без expand по Y (лог H3: winfo_reqheight раздувал окно до ~988 px высоты).
-        main_frame = tk.Frame(self.window, bg='#182030', padx=10, pady=10)
+        main_frame = tk.Frame(self.window, bg=theme.color('surface'), padx=10, pady=10)
         main_frame.pack(fill=tk.X)
 
         # Заголовок
         title_label = tk.Label(main_frame,
                                text="Разблокировка сервисов",
                                font=self._font("Arial", 14, "bold"),
-                               fg='white',
-                               bg='#182030')
+                               fg=theme.color('on_surface'),
+                               bg=theme.color('surface'))
         title_label.pack(anchor=tk.CENTER, pady=(0, 15))
 
         _wrap0 = max(200, self._s(380))
@@ -608,8 +612,8 @@ class ServiceUnlockWindow:
                 "Записи будут добавлены в файл /etc/hosts."
             ),
             font=self._font("Arial", 10),
-            fg='#8e8e93',
-            bg='#182030',
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface'),
             justify=tk.CENTER,
             wraplength=_wrap0,
         )
@@ -619,8 +623,8 @@ class ServiceUnlockWindow:
             main_frame,
             text="После добавления перезагрузите браузер",
             font=self._font("Arial", 10),
-            fg='#ff9500',
-            bg='#182030',
+            fg=theme.color('warning'),
+            bg=theme.color('surface'),
             justify=tk.CENTER,
             wraplength=_wrap0,
         )
@@ -641,17 +645,17 @@ class ServiceUnlockWindow:
 
 
         # Фрейм с прокруткой — высоту задаёт canvas, не expand на весь экран.
-        canvas_frame = tk.Frame(main_frame, bg='#182030')
+        canvas_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         canvas_frame.pack(fill=tk.X, pady=(0, 0))
 
         # Canvas со скроллом; полоса прокрутки скрыта — только колесо мыши / Button-4/5.
         canvas = tk.Canvas(
             canvas_frame,
-            bg='#182030',
+            bg=theme.color('surface'),
             highlightthickness=0,
             height=self._s(220),
         )
-        scrollable_frame = tk.Frame(canvas, bg='#182030')
+        scrollable_frame = tk.Frame(canvas, bg=theme.color('surface'))
 
         scrollable_frame.bind(
             "<Configure>",
@@ -713,18 +717,18 @@ class ServiceUnlockWindow:
             category_frame.pack(fill=tk.X, pady=(0, 10))
 
         # ========== КНОПКИ ВНИЗУ ==========
-        buttons_frame = tk.Frame(main_frame, bg='#182030')
+        buttons_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         buttons_frame.pack(fill=tk.X, pady=(0, 0))
 
         # Контейнер для центрирования кнопок
-        buttons_center_frame = tk.Frame(buttons_frame, bg='#182030')
+        buttons_center_frame = tk.Frame(buttons_frame, bg=theme.color('surface'))
         buttons_center_frame.pack()
 
         # Стиль кнопок
         button_style = {
             'font': self._font("Arial", 11),
-            'bg': '#15354D',
-            'fg': 'white',
+            'bg': theme.color('secondary_container'),
+            'fg': theme.color('on_surface'),
             'bd': 0,
             'padx': self._s(20),
             'pady': self._s(8),
@@ -734,7 +738,7 @@ class ServiceUnlockWindow:
         }
 
         # Первая строка кнопок
-        row1_frame = tk.Frame(buttons_center_frame, bg='#182030')
+        row1_frame = tk.Frame(buttons_center_frame, bg=theme.color('surface'))
         row1_frame.pack(pady=(0, 10))
 
         # Кнопка "Выбрать все"
@@ -756,7 +760,7 @@ class ServiceUnlockWindow:
         deselect_all_btn.pack(side=tk.LEFT)
 
         # Вторая строка кнопок
-        row2_frame = tk.Frame(buttons_center_frame, bg='#182030')
+        row2_frame = tk.Frame(buttons_center_frame, bg=theme.color('surface'))
         row2_frame.pack()
 
         # Кнопка "Сохранить"

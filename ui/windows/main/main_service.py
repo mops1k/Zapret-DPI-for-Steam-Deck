@@ -4,6 +4,7 @@ import threading
 import tkinter as tk
 
 from core.app_logging import LOG_FILE_PATH
+from ui.theme import theme
 
 
 def _shorten_service_error_message(message: str, limit: int = 700) -> str:
@@ -110,6 +111,20 @@ class MainServiceMixin:
         return True
 
 
+    def _set_service_indicator(self, role: str, text: str) -> None:
+        """Красит индикатор статуса и подпись в карточке службы токенами темы."""
+        color = theme.color(role)
+        try:
+            self.status_indicator.config(text="⬤", fg=color)
+        except tk.TclError:
+            pass
+        label = getattr(self, "service_state_label", None)
+        if label is not None:
+            try:
+                label.config(text=text, fg=theme.color("on_surface") if role == "success" else color)
+            except tk.TclError:
+                pass
+
     def check_service_status(self):
         """Проверяет статус службы Zapret"""
         try:
@@ -126,15 +141,15 @@ class MainServiceMixin:
             if result.returncode == 0 and status_output == "active":
                 # Служба активна
                 self.service_running = True
-                self.status_indicator.config(text="⬤", fg='#30d158')  # Зеленый круг
+                self._set_service_indicator("success", "Служба активна")
             elif result.returncode in (3, 4) or status_output in ("inactive", "unknown"):
                 # Служба неактивна или не существует
                 self.service_running = False
-                self.status_indicator.config(text="⬤", fg='#ff3b30')  # Красный круг
+                self._set_service_indicator("error", "Служба остановлена")
             else:
                 # Неизвестный статус
                 self.service_running = False
-                self.status_indicator.config(text="⬤", fg='#ff9500')  # Оранжевый круг
+                self._set_service_indicator("warning", "Статус службы неизвестен")
 
             # Текст кнопки не переписываем, пока идёт операция пользователя,
             # иначе опрос каждые 5 с инвертирует действие (start/stop).
@@ -149,7 +164,7 @@ class MainServiceMixin:
         except Exception as e:
             print(f"Ошибка проверки статуса службы: {e}")
             self.service_running = False
-            self.status_indicator.config(text="⬤", fg='#ff9500')  # Оранжевый круг
+            self._set_service_indicator("warning", "Статус службы неизвестен")
             # Все равно проверяем автозапуск
             self.check_autostart_status()
 
@@ -344,13 +359,13 @@ class MainServiceMixin:
         self.status_message.config(text=message)
 
         if success:
-            self.status_message.config(fg='#30d158')  # Зеленый
+            self.status_message.config(fg=theme.color("success"))
         elif warning:
-            self.status_message.config(fg='#ff9500')  # Оранжевый
+            self.status_message.config(fg=theme.color("warning"))
         elif error:
-            self.status_message.config(fg='#ff3b30')  # Красный
+            self.status_message.config(fg=theme.color("error"))
         else:
-            self.status_message.config(fg='#AAAAAA')  # Серый
+            self.status_message.config(fg=theme.color("on_surface_variant"))
 
         # Автоматически очищаем сообщение через 3 секунды (кроме ошибок).
         # Предыдущий таймер отменяем, иначе старое сообщение стирает новое.

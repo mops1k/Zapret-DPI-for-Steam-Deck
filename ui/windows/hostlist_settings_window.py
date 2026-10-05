@@ -11,6 +11,7 @@ from core.dpi_utils import (
     wait_window_safely,
 )
 from core.tk_scale_lab_helpers import logical_ui_scale, warning_dialog_scale
+from ui.theme import theme
 
 class HostlistSettingsWindow:
     # Эталон размера окна: ширина как раньше, высота чуть меньше (масштабируется через _s)
@@ -87,12 +88,14 @@ class HostlistSettingsWindow:
         return max(1, int(round(float(px) * f)))
 
     def _font(self, family, size, weight=None):
-        """Шрифт без двойного DPI: только logical_ui_scale (Tk уже тянет pt при своём scaling)."""
+        """Шрифт темы с учётом logical_ui_scale (Tk сам тянет pt при своём scaling)."""
         f = float(getattr(self, "_logical_scale", 1.0))
         s = max(8, int(round(float(size) * f)))
+        kind = "mono" if "courier" in str(family).lower() else "sans"
+        family_name = theme.family(kind)
         if weight:
-            return (family, s, weight)
-        return (family, s)
+            return (family_name, s, weight)
+        return (family_name, s)
 
     def _clamped_fixed_geometry_wh(self, anchor=None):
         anchor = anchor or self._anchor_root()
@@ -226,19 +229,6 @@ class HostlistSettingsWindow:
             ti = tab.get("text_input")
             if ti:
                 ti.configure(font=self._font("Courier New", 10))
-
-        style = ttk.Style()
-        nb_style = getattr(self, "_hl_nb_style", "Hostlist.TNotebook")
-        try:
-            style.configure(
-                f"{nb_style}.Tab",
-                background="#1a1a2e",
-                foreground="#8e8e93",
-                padding=[self._s(10), self._s(5)],
-                font=self._font("Arial", 10),
-            )
-        except tk.TclError:
-            pass
 
         for b in (
             getattr(self, "save_button", None),
@@ -558,15 +548,15 @@ class HostlistSettingsWindow:
 
     def create_text_tab(self, parent, tab_name, description, examples, file_name):
         """Создает вкладку с текстовым полем для ввода доменов"""
-        frame = tk.Frame(parent, bg='#182030')
+        frame = tk.Frame(parent, bg=theme.color('surface'))
 
         # Описание
         info = tk.Label(
             frame,
             text=description,
             font=self._font("Arial", 10),
-            fg='#8e8e93',
-            bg='#182030',
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface'),
             justify=tk.LEFT,
             anchor=tk.NW,
             wraplength=self._s(400),
@@ -584,22 +574,22 @@ class HostlistSettingsWindow:
         frame.after_idle(_sync_tab_info_wrap)
 
         # Примеры доменов
-        examples_frame = tk.Frame(frame, bg='#182030')
+        examples_frame = tk.Frame(frame, bg=theme.color('surface'))
         examples_frame.grid(row=1, column=0, sticky="ew", pady=(0, self._s(10)))
 
         examples_label = tk.Label(examples_frame,
                                 text="Примеры доменов:",
                                 font=self._font("Arial", 10, "italic"),
-                                fg='#8e8e93',
-                                bg='#182030')
+                                fg=theme.color('on_surface_variant'),
+                                bg=theme.color('surface'))
         examples_label.pack(anchor=tk.W)
 
         examples_text = tk.Label(
             examples_frame,
             text=examples,
             font=self._font("Courier New", 9),
-            fg='#8e8e93',
-            bg='#182030',
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface'),
             justify=tk.LEFT,
             anchor=tk.NW,
             wraplength=0,
@@ -607,7 +597,7 @@ class HostlistSettingsWindow:
         examples_text.pack(anchor=tk.NW)
 
         # Блок ввода: строка с weight=1 — занимает оставшуюся высоту вкладки (не выталкивает кнопки окна)
-        text_frame = tk.Frame(frame, bg='#182030')
+        text_frame = tk.Frame(frame, bg=theme.color('surface'))
         text_frame.grid(row=2, column=0, sticky="nsew", pady=(0, self._s(10)))
         frame.grid_rowconfigure(2, weight=1)
         frame.grid_columnconfigure(0, weight=1)
@@ -616,12 +606,12 @@ class HostlistSettingsWindow:
         text_label = tk.Label(text_frame,
                             text="Введите домены:",
                             font=self._font("Arial", 11),
-                            fg='#0a84ff',
-                            bg='#182030')
+                            fg=theme.color('primary'),
+                            bg=theme.color('surface'))
         text_label.grid(row=0, column=0, sticky="w", pady=(0, self._s(5)))
 
         # Текстовое поле с прокруткой
-        text_container = tk.Frame(text_frame, bg='#182030')
+        text_container = tk.Frame(text_frame, bg=theme.color('surface'))
         text_container.grid(row=1, column=0, sticky="nsew")
         text_frame.grid_rowconfigure(1, weight=1)
         text_frame.grid_columnconfigure(0, weight=1)
@@ -629,9 +619,9 @@ class HostlistSettingsWindow:
         # Текстовое поле
         text_input = tk.Text(text_container,
                             font=self._font("Courier New", 10),
-                            bg='#1a1a2e',
-                            fg='#ffffff',
-                            insertbackground='white',
+                            bg=theme.color('surface_container_lowest'),
+                            fg=theme.color('on_surface'),
+                            insertbackground=theme.color('primary'),
                             wrap=tk.NONE,
                             height=6)
         text_input.grid(row=0, column=0, sticky="nsew")
@@ -652,7 +642,7 @@ class HostlistSettingsWindow:
         """Создает окно настроек HOSTLIST"""
         self.window = tk.Toplevel(self.parent)
         self.window.title("Настройки фильтрации доменов")
-        self.window.configure(bg='#182030')
+        self.window.configure(bg=theme.color('surface'))
         self.window.resizable(True, True)
 
         anchor = self._anchor_root()
@@ -660,7 +650,7 @@ class HostlistSettingsWindow:
         self._logical_scale = float(logical_ui_scale(anchor))
 
         # Основной фрейм
-        main_frame = tk.Frame(self.window, bg='#182030', padx=self._s(20), pady=self._s(20))
+        main_frame = tk.Frame(self.window, bg=theme.color('surface'), padx=self._s(20), pady=self._s(20))
         main_frame.pack(fill=tk.BOTH, expand=True)
         self._hl_main_frame = main_frame
 
@@ -668,25 +658,25 @@ class HostlistSettingsWindow:
         title_label = tk.Label(main_frame,
                                text="Настройки фильтрации доменов",
                                font=self._font("Arial", 14, "bold"),
-                               fg='white',
-                               bg='#182030')
+                               fg=theme.color('on_surface'),
+                               bg=theme.color('surface'))
         title_label.grid(row=0, column=0, pady=(0, self._s(15)))
         self._hl_title_label = title_label
 
         # Фрейм с двумя колонками (строка с weight=1 — сжимается по высоте окна)
-        columns_frame = tk.Frame(main_frame, bg='#182030')
+        columns_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         columns_frame.grid(row=1, column=0, sticky="nsew")
         main_frame.grid_rowconfigure(1, weight=1)
         main_frame.grid_columnconfigure(0, weight=1)
 
         # Левая колонка (30% ширины)
-        left_frame = tk.Frame(columns_frame, bg='#182030', width=self._s(260))
+        left_frame = tk.Frame(columns_frame, bg=theme.color('surface'), width=self._s(260))
         left_frame.grid(row=0, column=0, sticky="nsew")
         left_frame.pack_propagate(False)
         self._hl_left_frame = left_frame
 
         # Правая колонка (70% ширины)
-        right_frame = tk.Frame(columns_frame, bg='#182030')
+        right_frame = tk.Frame(columns_frame, bg=theme.color('surface'))
         right_frame.grid(row=0, column=1, sticky="nsew", padx=(self._s(15), 0))
         self._hl_right_frame = right_frame
         columns_frame.grid_columnconfigure(1, weight=1)
@@ -697,8 +687,8 @@ class HostlistSettingsWindow:
         instruction_title = tk.Label(left_frame,
                                     text="Пользовательские домены",
                                     font=self._font("Arial", 12, "bold"),
-                                    fg='#0a84ff',
-                                    bg='#182030')
+                                    fg=theme.color('primary'),
+                                    bg=theme.color('surface'))
         instruction_title.pack(anchor=tk.W, pady=(0, self._s(10)))
         self._hl_instruction_title = instruction_title
 
@@ -710,8 +700,8 @@ class HostlistSettingsWindow:
                 "вкладку «Незаблокированный» и внесите домен в список."
             ),
             font=self._font("Arial", 10),
-            fg='#8e8e93',
-            bg='#182030',
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface'),
             justify=tk.LEFT,
             anchor=tk.NW,
             wraplength=self._s(240),
@@ -723,8 +713,8 @@ class HostlistSettingsWindow:
         left_title = tk.Label(left_frame,
                              text="Предустановленные сервисы",
                              font=self._font("Arial", 12, "bold"),
-                             fg='#0a84ff',
-                             bg='#182030')
+                             fg=theme.color('primary'),
+                             bg=theme.color('surface'))
         left_title.pack(anchor=tk.W, pady=(self._s(20), self._s(10)))
         self._hl_left_title = left_title
 
@@ -735,8 +725,8 @@ class HostlistSettingsWindow:
                 "Домены сервисов будут прописаны в файл list-general.txt."
             ),
             font=self._font("Arial", 10),
-            fg='#8e8e93',
-            bg='#182030',
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface'),
             justify=tk.LEFT,
             anchor=tk.NW,
             wraplength=self._s(220),
@@ -757,7 +747,7 @@ class HostlistSettingsWindow:
         left_frame.after_idle(_sync_left_column_wrap)
 
         # Фрейм для чекбоксов
-        checkboxes_frame = tk.Frame(left_frame, bg='#182030')
+        checkboxes_frame = tk.Frame(left_frame, bg=theme.color('surface'))
         checkboxes_frame.pack(fill=tk.X, pady=(0, 0))
 
         # Чекбокс WhatsApp
@@ -765,12 +755,12 @@ class HostlistSettingsWindow:
                                        text="WhatsApp",
                                        variable=self.whatsapp_var,
                                        font=self._font("Arial", 11),
-                                       fg='white',
-                                       bg='#182030',
-                                       selectcolor='#182030',
-                                       activebackground='#182030',
+                                       fg=theme.color('on_surface'),
+                                       bg=theme.color('surface'),
+                                       selectcolor=theme.color('surface'),
+                                       activebackground=theme.color('surface_container_high'),
                                        highlightthickness=0,
-                                       activeforeground='white')
+                                       activeforeground=theme.color('primary'))
         whatsapp_check.pack(anchor=tk.W, pady=(0, self._s(5)))
 
         # Чекбокс Rockstar/Epic Games
@@ -778,12 +768,12 @@ class HostlistSettingsWindow:
                                        text="Rockstar/Epic Games",
                                        variable=self.rockstar_var,
                                        font=self._font("Arial", 11),
-                                       fg='white',
-                                       bg='#182030',
-                                       selectcolor='#182030',
-                                       activebackground='#182030',
+                                       fg=theme.color('on_surface'),
+                                       bg=theme.color('surface'),
+                                       selectcolor=theme.color('surface'),
+                                       activebackground=theme.color('surface_container_high'),
                                        highlightthickness=0,
-                                       activeforeground='white')
+                                       activeforeground=theme.color('primary'))
         rockstar_check.pack(anchor=tk.W, pady=(0, self._s(5)))
 
         # Чекбокс Github
@@ -791,12 +781,12 @@ class HostlistSettingsWindow:
                                        text="Github",
                                        variable=self.github_var,
                                        font=self._font("Arial", 11),
-                                       fg='white',
-                                       bg='#182030',
-                                       selectcolor='#182030',
-                                       activebackground='#182030',
+                                       fg=theme.color('on_surface'),
+                                       bg=theme.color('surface'),
+                                       selectcolor=theme.color('surface'),
+                                       activebackground=theme.color('surface_container_high'),
                                        highlightthickness=0,
-                                       activeforeground='white')
+                                       activeforeground=theme.color('primary'))
         github_check.pack(anchor=tk.W, pady=(0, self._s(5)))
 
         self._hl_checkbuttons = (
@@ -808,24 +798,7 @@ class HostlistSettingsWindow:
 
         # ========== ПРАВАЯ КОЛОНКА ==========
         # Создаем Notebook для вкладок (свой стиль — не трогаем глобальный TNotebook других окон)
-        self._hl_nb_style = "Hostlist.TNotebook"
-        style = ttk.Style()
-        style.theme_use('default')
-        style.configure(self._hl_nb_style, background='#182030', borderwidth=0)
-        style.configure(
-            f"{self._hl_nb_style}.Tab",
-            background='#1a1a2e',
-            foreground='#8e8e93',
-            padding=[self._s(10), self._s(5)],
-            font=self._font('Arial', 10),
-        )
-        style.map(
-            f"{self._hl_nb_style}.Tab",
-            background=[('selected', '#0a84ff')],
-            foreground=[('selected', 'white')],
-        )
-
-        notebook = ttk.Notebook(right_frame, style=self._hl_nb_style)
+        notebook = ttk.Notebook(right_frame)
         notebook.grid(row=0, column=0, sticky="nsew")
         right_frame.grid_rowconfigure(0, weight=1)
         right_frame.grid_columnconfigure(0, weight=1)
@@ -856,19 +829,19 @@ class HostlistSettingsWindow:
         self._hl_tab_refs = (blocked_tab_refs, unblocked_tab_refs)
 
         # ========== КНОПКИ ВНИЗУ ==========
-        buttons_frame = tk.Frame(main_frame, bg='#182030')
+        buttons_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         buttons_frame.grid(row=2, column=0, sticky="ew", pady=(self._s(20), 0))
         self._hl_buttons_frame = buttons_frame
 
         # Контейнер для центрирования кнопок
-        buttons_center_frame = tk.Frame(buttons_frame, bg='#182030')
+        buttons_center_frame = tk.Frame(buttons_frame, bg=theme.color('surface'))
         buttons_center_frame.pack()
 
         # Стиль кнопок
         button_style = {
             'font': self._font('Arial', 11),
-            'bg': '#15354D',
-            'fg': 'white',
+            'bg': theme.color('secondary_container'),
+            'fg': theme.color('on_surface'),
             'bd': 0,
             'padx': self._s(25),
             'pady': self._s(10),

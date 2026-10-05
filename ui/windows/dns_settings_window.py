@@ -6,6 +6,7 @@ from ui.components.custom_messagebox import show_info, show_error
 from ui.components.button_styler import create_hover_button
 from core.sudo_helper import run_sudo
 from core.dpi_utils import place_toplevel_centered_on_parent, wait_window_safely
+from ui.theme import theme
 
 class DNSSettingsWindow:
     def __init__(self, parent):
@@ -437,16 +438,16 @@ class DNSSettingsWindow:
 
     def create_dns_group(self, parent, group_name, dns_list):
         """Создает группу чекбоксов DNS"""
-        group_frame = tk.Frame(parent, bg='#182030')
+        group_frame = tk.Frame(parent, bg=theme.color('surface'))
         group_frame.pack(fill=tk.X, pady=(8, 0))
 
         # Заголовок группы
         title_label = tk.Label(
             group_frame,
             text=group_name,
-            font=("Arial", 11, "bold"),
-            fg='#0a84ff',
-            bg='#182030'
+            font=theme.font('title_small'),
+            fg=theme.color('primary'),
+            bg=theme.color('surface')
         )
         title_label.pack(anchor=tk.W, pady=(0, 0))
 
@@ -454,7 +455,7 @@ class DNSSettingsWindow:
         for dns_name in dns_list:
             if dns_name in self.dns_vars:
                 # Используем Frame с grid для выравнивания в две колонки
-                check_frame = tk.Frame(group_frame, bg='#182030')
+                check_frame = tk.Frame(group_frame, bg=theme.color('surface'))
                 check_frame.pack(fill=tk.X, pady=1)
 
                 # Настраиваем grid для двух колонок
@@ -465,12 +466,12 @@ class DNSSettingsWindow:
                     check_frame,
                     text=dns_name,
                     variable=self.dns_vars[dns_name],
-                    font=("Arial", 10),
-                    fg='white',
-                    bg='#182030',
-                    selectcolor='#182030',
-                    activebackground='#182030',
-                    activeforeground='white',
+                    font=theme.font('body_small'),
+                    fg=theme.color('on_surface'),
+                    bg=theme.color('surface'),
+                    selectcolor=theme.color('surface'),
+                    activebackground=theme.color('surface_container_high'),
+                    activeforeground=theme.color('primary'),
                     highlightthickness=0,
                     cursor='hand2',
                     command=lambda dn=dns_name: self.on_dns_selected(dn)
@@ -491,9 +492,9 @@ class DNSSettingsWindow:
                     addr_label = tk.Label(
                         check_frame,
                         text=addr_text,
-                        font=("Courier", 9),  # monospace для равного отступа
-                        fg='white',
-                        bg='#182030',
+                        font=theme.font('body_small', mono=True),  # monospace для равного отступа
+                        fg=theme.color('on_surface'),
+                        bg=theme.color('surface'),
                         anchor=tk.W
                     )
                     addr_label.grid(row=0, column=1, sticky=tk.W, padx=(20, 0))
@@ -504,17 +505,17 @@ class DNSSettingsWindow:
         """Создает окно настроек DNS"""
         self.window = tk.Toplevel(self.parent)
         self.window.title("Настройки DNS")
-        self.window.configure(bg='#182030')
+        self.window.configure(bg=theme.color('surface'))
         # Снимаем глобальную привязку колеса при закрытии окна
         self.window.bind("<Destroy>", lambda _e: self._unbind_wheel(), add="+")
 
         # Основной фрейм
-        main_frame = tk.Frame(self.window, bg='#182030')
+        main_frame = tk.Frame(self.window, bg=theme.color('surface'))
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # Canvas для прокрутки
-        canvas = tk.Canvas(main_frame, bg='#182030', highlightthickness=0)
-        scrollable_frame = tk.Frame(canvas, bg='#182030')
+        canvas = tk.Canvas(main_frame, bg=theme.color('surface'), highlightthickness=0)
+        scrollable_frame = tk.Frame(canvas, bg=theme.color('surface'))
 
         scrollable_frame.bind(
             "<Configure>",
@@ -540,16 +541,16 @@ class DNSSettingsWindow:
         scrollable_frame.bind("<MouseWheel>", on_mouse_wheel)
 
         # Внутренний фрейм с отступами
-        inner_frame = tk.Frame(scrollable_frame, bg='#182030', padx=20, pady=20)
+        inner_frame = tk.Frame(scrollable_frame, bg=theme.color('surface'), padx=20, pady=20)
         inner_frame.pack(fill=tk.BOTH, expand=True)
 
         # Заголовок
         title_label = tk.Label(
             inner_frame,
             text="Настройки DNS",
-            font=("Arial", 14, "bold"),
-            fg='white',
-            bg='#182030'
+            font=theme.font('title_large'),
+            fg=theme.color('on_surface'),
+            bg=theme.color('surface')
         )
         title_label.pack(anchor=tk.CENTER, pady=(0, 15))
 
@@ -560,9 +561,9 @@ class DNSSettingsWindow:
         conn_label = tk.Label(
             inner_frame,
             text=conn_info,
-            font=("Arial", 10),
-            fg='#8e8e93',
-            bg='#182030'
+            font=theme.font('body_small'),
+            fg=theme.color('on_surface_variant'),
+            bg=theme.color('surface')
         )
         conn_label.pack(anchor=tk.W)
 
@@ -584,32 +585,32 @@ class DNSSettingsWindow:
                             ["Xbox DNS", "GeoHide DNS", "DNS Mafioznik.xyz", "Comss DNS"])
 
         # Пользовательский DNS
-        custom_group = tk.Frame(inner_frame, bg='#182030')
+        custom_group = tk.Frame(inner_frame, bg=theme.color('surface'))
         custom_group.pack(fill=tk.X, pady=(8, 0))
 
         custom_title = tk.Label(
             custom_group,
             text="Пользовательский DNS",
-            font=("Arial", 11, "bold"),
-            fg='#0a84ff',
-            bg='#182030'
+            font=theme.font('title_small'),
+            fg=theme.color('primary'),
+            bg=theme.color('surface')
         )
         custom_title.pack(anchor=tk.W, pady=(0, 0))
 
         # Фрейм для полей ввода
-        input_frame = tk.Frame(custom_group, bg='#182030')
+        input_frame = tk.Frame(custom_group, bg=theme.color('surface'))
         input_frame.pack(fill=tk.X)
 
         # Основной DNS
-        primary_frame = tk.Frame(input_frame, bg='#182030')
+        primary_frame = tk.Frame(input_frame, bg=theme.color('surface'))
         primary_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
 
         primary_label = tk.Label(
             primary_frame,
             text="Основной:",
-            font=("Arial", 10),
-            fg='white',
-            bg='#182030'
+            font=theme.font('body_small'),
+            fg=theme.color('on_surface'),
+            bg=theme.color('surface')
         )
         primary_label.pack(anchor=tk.W, pady=(0, 5))
 
@@ -617,10 +618,10 @@ class DNSSettingsWindow:
         self.primary_entry = tk.Entry(
             primary_frame,
             textvariable=self.custom_primary_var,
-            font=("Arial", 10),
-            bg='#1a1a2e',
-            fg='#8e8e93',  # Серый цвет по умолчанию для примера
-            insertbackground='white',
+            font=theme.font('body_small'),
+            bg=theme.color('surface_container_lowest'),
+            fg=theme.color('on_surface_variant'),  # Серый цвет по умолчанию для примера
+            insertbackground=theme.color('primary'),
             highlightthickness=0,
             width=20
         )
@@ -635,13 +636,13 @@ class DNSSettingsWindow:
                 current_text = var.get()
                 if current_text == example_text:
                     entry.delete(0, tk.END)
-                    entry.config(fg='white')
+                    entry.config(fg=theme.color('on_surface'))
 
             def on_focus_out(event):
                 current_text = var.get().strip()
                 if not current_text:
                     var.set(example_text)
-                    entry.config(fg='#8e8e93')
+                    entry.config(fg=theme.color('on_surface_variant'))
 
             entry.bind('<FocusIn>', on_focus_in)
             entry.bind('<FocusOut>', on_focus_out)
@@ -650,15 +651,15 @@ class DNSSettingsWindow:
         setup_entry_with_example(self.primary_entry, self.custom_primary_var, "Пример: 8.8.8.8")
 
         # Дополнительный DNS
-        secondary_frame = tk.Frame(input_frame, bg='#182030')
+        secondary_frame = tk.Frame(input_frame, bg=theme.color('surface'))
         secondary_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         secondary_label = tk.Label(
             secondary_frame,
             text="Дополнительный:",
-            font=("Arial", 10),
-            fg='white',
-            bg='#182030'
+            font=theme.font('body_small'),
+            fg=theme.color('on_surface'),
+            bg=theme.color('surface')
         )
         secondary_label.pack(anchor=tk.W, pady=(0, 5))
 
@@ -666,10 +667,10 @@ class DNSSettingsWindow:
         self.secondary_entry = tk.Entry(
             secondary_frame,
             textvariable=self.custom_secondary_var,
-            font=("Arial", 10),
-            bg='#1a1a2e',
-            fg='#8e8e93',  # Серый цвет по умолчанию для примера
-            insertbackground='white',
+            font=theme.font('body_small'),
+            bg=theme.color('surface_container_lowest'),
+            fg=theme.color('on_surface_variant'),  # Серый цвет по умолчанию для примера
+            insertbackground=theme.color('primary'),
             highlightthickness=0,
             width=20
         )
@@ -679,18 +680,18 @@ class DNSSettingsWindow:
         setup_entry_with_example(self.secondary_entry, self.custom_secondary_var, "Пример: 8.8.4.4")
 
         # ========== КНОПКИ ==========
-        buttons_frame = tk.Frame(inner_frame, bg='#182030')
+        buttons_frame = tk.Frame(inner_frame, bg=theme.color('surface'))
         buttons_frame.pack(fill=tk.X, pady=(20, 0))
 
-        buttons_center_frame = tk.Frame(buttons_frame, bg='#182030')
+        buttons_center_frame = tk.Frame(buttons_frame, bg=theme.color('surface'))
         buttons_center_frame.pack()
 
 
         # Стиль кнопок
         button_style = {
-            'font': ('Arial', 11),
-            'bg': '#15354D',
-            'fg': 'white',
+            'font': theme.font('label_large'),
+            'bg': theme.color('secondary_container'),
+            'fg': theme.color('on_surface'),
             'bd': 0,
             'padx': 20,
             'pady': 8,
@@ -763,10 +764,10 @@ class DNSSettingsWindow:
         """Устанавливает текст в поле ввода с правильным цветом"""
         if text == "Пример: 8.8.8.8" or text == "Пример: 8.8.4.4":
             text_var.set(text)
-            entry_widget.config(fg='#8e8e93')  # Серый для примера
+            entry_widget.config(fg=theme.color('on_surface_variant'))  # Серый для примера
         elif text:
             text_var.set(text)
-            entry_widget.config(fg='white')    # Белый для реальных данных
+            entry_widget.config(fg=theme.color('on_surface'))    # Белый для реальных данных
         else:
             # Если текст пустой, устанавливаем пример
             if text_var == self.custom_primary_var:
@@ -775,7 +776,7 @@ class DNSSettingsWindow:
                 default_example = "Пример: 8.8.4.4"
 
             text_var.set(default_example)
-            entry_widget.config(fg='#8e8e93')
+            entry_widget.config(fg=theme.color('on_surface_variant'))
 
     def get_current_dns_servers(self):
         """Получить текущие DNS серверы из resolvectl"""

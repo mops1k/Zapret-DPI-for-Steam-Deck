@@ -11,6 +11,7 @@ from core.dpi_utils import (
 )
 from core.tk_scale_lab_helpers import logical_ui_scale, warning_dialog_scale, winfo_dpi
 from core.manager_config import VERSION_CONFIG
+from ui.theme import theme
 _last_available_site = None
 _last_check_time = 0
 
@@ -62,21 +63,21 @@ def show_info_dialog(parent):
 
     dialog.title("Информация о Zapret DPI Manager")
 
-    dialog.configure(bg='#182030')
+    dialog.configure(bg=theme.color('surface'))
     dialog.transient(parent)
 
     """Настройка свойств окна"""
-    dialog.configure(bg='#182030')
+    dialog.configure(bg=theme.color('surface'))
 
     # Заголовок
-    title_frame = tk.Frame(dialog, bg='#182030', pady=15)
+    title_frame = tk.Frame(dialog, bg=theme.color('surface'), pady=15)
     title_frame.pack(fill=tk.X)
 
     tk.Label(title_frame, text="Информация",
-             font=("Arial", 14, "bold"), bg='#182030', fg='white').pack()
+             font=theme.font('title_large'), bg=theme.color('surface'), fg=theme.color('on_surface')).pack()
 
     # Основное содержимое
-    content_frame = tk.Frame(dialog, bg='#182030', padx=20)
+    content_frame = tk.Frame(dialog, bg=theme.color('surface'), padx=20)
     # Без expand: иначе min_height окна даёт «резиновый» зазор между контентом и кнопкой
     # при каждом пересчёте wraplength по <Configure>.
     content_frame.pack(fill=tk.X)
@@ -86,7 +87,7 @@ def show_info_dialog(parent):
         "Zapret DPI Manager помогает получить доступ к Youtube и Discord на Steam Deck"
     )
 
-    info_frame = tk.Frame(content_frame, bg='#182030')
+    info_frame = tk.Frame(content_frame, bg=theme.color('surface'))
     info_frame.pack(fill=tk.X)
 
     def _info_layout_u():
@@ -99,15 +100,15 @@ def show_info_dialog(parent):
         return max(120, ww - pd)
 
     info_label = tk.Label(info_frame, text=info_text,
-                        font=('Arial', 11),
-                        bg='#182030',
-                        fg='#ff9500',
+                        font=theme.font('body_medium'),
+                        bg=theme.color('surface'),
+                        fg=theme.color('warning'),
                         wraplength=_scaled_info_wraplength(),
                         justify=tk.CENTER
                         )
     info_label.pack(fill=tk.X)
 
-    links_shell = tk.Frame(content_frame, bg='#182030')
+    links_shell = tk.Frame(content_frame, bg=theme.color('surface'))
     links_shell.pack(fill=tk.X)
 
     # Сначала объявляем функции для ссылок
@@ -116,28 +117,28 @@ def show_info_dialog(parent):
 
     # Функция для создания ссылки с разделенной иконкой и текстом
     def create_link_with_icon(parent, icon, text, command_func):
-        link_frame = tk.Frame(parent, bg='#182030')
+        link_frame = tk.Frame(parent, bg=theme.color('surface'))
         link_frame.pack(anchor=tk.W, pady=(0, 8), fill=tk.X)
 
         # Иконка (без подчеркивания)
-        icon_label = tk.Label(link_frame, text=icon, font=('Arial', 11),
-                            bg='#182030', fg='#3CAA3C', cursor='hand2')
+        icon_label = tk.Label(link_frame, text=icon, font=theme.font('body_medium'),
+                            bg=theme.color('surface'), fg=theme.color('primary'), cursor='hand2')
         icon_label.pack(side=tk.LEFT)
         icon_label.bind("<Button-1>", command_func)
-        icon_label.bind("<Enter>", lambda e: (icon_label.config(fg='#4d8058'),
-                                            text_label.config(fg='#4d8058', font=('Arial', 11, 'underline'))))
-        icon_label.bind("<Leave>", lambda e: (icon_label.config(fg='#3CAA3C'),
-                                            text_label.config(fg='#3CAA3C', font=('Arial', 11))))
+        icon_label.bind("<Enter>", lambda e: (icon_label.config(fg=theme.state('primary', 'hover')),
+                                            text_label.config(fg=theme.state('primary', 'hover'), font=(theme.family('sans'), theme.font('body_medium')[1], 'underline'))))
+        icon_label.bind("<Leave>", lambda e: (icon_label.config(fg=theme.color('primary')),
+                                            text_label.config(fg=theme.color('primary'), font=theme.font('body_medium'))))
 
         # Текст (с подчеркиванием при наведении)
-        text_label = tk.Label(link_frame, text=text, font=('Arial', 11),
-                            bg='#182030', fg='#3CAA3C', cursor='hand2')
+        text_label = tk.Label(link_frame, text=text, font=theme.font('body_medium'),
+                            bg=theme.color('surface'), fg=theme.color('primary'), cursor='hand2')
         text_label.pack(side=tk.LEFT)
         text_label.bind("<Button-1>", command_func)
-        text_label.bind("<Enter>", lambda e: (icon_label.config(fg='#4d8058'),
-                                            text_label.config(fg='#4d8058', font=('Arial', 11, 'underline'))))
-        text_label.bind("<Leave>", lambda e: (icon_label.config(fg='#3CAA3C'),
-                                            text_label.config(fg='#3CAA3C', font=('Arial', 11))))
+        text_label.bind("<Enter>", lambda e: (icon_label.config(fg=theme.state('primary', 'hover')),
+                                            text_label.config(fg=theme.state('primary', 'hover'), font=(theme.family('sans'), theme.font('body_medium')[1], 'underline'))))
+        text_label.bind("<Leave>", lambda e: (icon_label.config(fg=theme.color('primary')),
+                                            text_label.config(fg=theme.color('primary'), font=theme.font('body_medium'))))
 
         return link_frame
 
@@ -147,13 +148,13 @@ def show_info_dialog(parent):
     )
 
     # Отображаем версии в одну строку по центру
-    versions_frame = tk.Frame(content_frame, bg='#182030')
+    versions_frame = tk.Frame(content_frame, bg=theme.color('surface'))
     versions_frame.pack(fill=tk.X)
 
     program_version = VERSION_CONFIG.get("current_version", "Неизвестно")
     version_text = f"Zapret DPI Manager · {program_version}"
     version_label = tk.Label(versions_frame, text=version_text,
-                           font=("Arial", 9), fg='#5BA06A', bg='#182030')
+                           font=theme.font('label_small'), fg=theme.color('success'), bg=theme.color('surface'))
     version_label.pack(anchor=tk.CENTER)
 
     def _apply_info_vertical_spacing():
@@ -191,14 +192,14 @@ def show_info_dialog(parent):
     content_frame.bind("<Configure>", lambda _e: _sync_info_wrap_from_width(), add="+")
 
     # Кнопка закрытия
-    button_frame = tk.Frame(dialog, bg='#182030')
+    button_frame = tk.Frame(dialog, bg=theme.color('surface'))
     button_frame.pack(fill=tk.X, pady=(max(10, int(round(14 * _info_layout_u()))), 15))
     _apply_info_vertical_spacing()
 
     close_style = {
-        'font': ('Arial', 10),
-        'bg': '#15354D',
-        'fg': 'white',
+        'font': theme.font('body_small'),
+        'bg': theme.color('secondary_container'),
+        'fg': theme.color('on_surface'),
         'bd': 0,
         'padx': 20,
         'pady': 8,

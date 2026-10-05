@@ -1,8 +1,10 @@
 import tkinter as tk
-from ui.components.button_styler import create_hover_button
-from core.strategy_data import STRATEGY_OPTIONS, save_strategy_names, load_strategy_names
-from core.service_manager import ServiceManager
+
 from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set, wait_window_safely
+from core.service_manager import ServiceManager
+from core.strategy_data import STRATEGY_OPTIONS, load_strategy_names, save_strategy_names
+from ui.components.material import ThinScrollbar, TopAppBar, filled_button, text_button
+from ui.theme import theme
 
 class CustomStrategyWindow:
     def __init__(self, parent):
@@ -24,11 +26,11 @@ class CustomStrategyWindow:
             self.service_manager = None
             print("Предупреждение: ServiceManager не загружен")
 
-        # Цвета
-        self.success_color = '#4CAF50'  # Зеленый для успеха и выбранных элементов
-        self.warning_color = '#FF9800'  # Оранжевый для предупреждений
-        self.error_color = '#F44336'    # Красный для ошибок
-        self.default_status_color = '#AAAAAA'  # Серый по умолчанию
+        # Цвета статуса берём из текущей темы Material 3
+        self.success_color = theme.color("success")
+        self.warning_color = theme.color("warning")
+        self.error_color = theme.color("error")
+        self.default_status_color = theme.color("on_surface_variant")
 
         self.setup_window_properties()
         self.root.title("Сборка своей стратегии")
@@ -40,161 +42,124 @@ class CustomStrategyWindow:
 
     def setup_window_properties(self):
         """Настройка свойств окна"""
-        self.root.configure(bg='#182030')
+        self.root.configure(bg=theme.color("surface"))
         self.root.transient(self.parent)
         safe_grab_set(self.root)
 
     def setup_ui(self):
         """Настройка интерфейса"""
-        main_frame = tk.Frame(self.root, bg='#182030', padx=20, pady=20)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame = tk.Frame(self.root, bg=theme.color("surface"))
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=theme.space("lg"), pady=theme.space("lg"))
 
-        # Заголовок
-        title_label = tk.Label(main_frame, text="Сборка своей стратегии",
-                            font=("Arial", 16, "bold"), fg='white', bg='#182030')
-        title_label.pack(pady=(0, 20))
+        self.app_bar = TopAppBar(
+            main_frame,
+            title="Сборка своей стратегии",
+            subtitle="Выберите по одному варианту для каждой категории трафика",
+            bg_role="surface",
+        )
+        self.app_bar.pack(fill=tk.X, pady=(0, theme.space("md")))
 
-        # Основной контейнер с двумя колонками
-        content_frame = tk.Frame(main_frame, bg='#182030')
-        content_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+        content_frame = tk.Frame(main_frame, bg=theme.color("surface"))
+        content_frame.pack(fill=tk.BOTH, expand=True, pady=(0, theme.space("md")))
 
-        # Левая колонка - список категорий стратегий
-        left_frame = tk.Frame(content_frame, bg='#182030', width=200)
-        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, padx=(0, 15))
+        # Левая колонка — категории трафика
+        left_frame = tk.Frame(content_frame, bg=theme.color("surface_container_low"), width=theme.px(210))
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, padx=(0, theme.space("md")))
         left_frame.pack_propagate(False)
 
-        tk.Label(left_frame, text="Категории трафика:",
-                font=("Arial", 12, "bold"), fg='white', bg='#182030').pack(anchor=tk.W, pady=(0, 10))
+        tk.Label(
+            left_frame,
+            text="Категории трафика:",
+            anchor="w",
+            **theme.text("label_large", bg_role="surface_container_low"),
+        ).pack(fill=tk.X, padx=theme.space("sm"), pady=(theme.space("sm"), theme.space("xs")))
 
-        # Контейнер для списка категорий с прокруткой
-        categories_container = tk.Frame(left_frame, bg='#182030')
-        categories_container.pack(fill=tk.BOTH, expand=True)
+        categories_container = tk.Frame(left_frame, bg=theme.color("surface_container_low"))
+        categories_container.pack(fill=tk.BOTH, expand=True, padx=theme.space("xs"), pady=(0, theme.space("sm")))
 
-        # Список категорий
         self.categories_listbox = tk.Listbox(
             categories_container,
-            bg='#15354D',
-            fg='white',
-            selectbackground='#1E4A6E',
-            selectforeground='white',
-            font=("Arial", 11),
+            bg=theme.color("surface_container_low"),
+            fg=theme.color("on_surface"),
+            selectbackground=theme.color("primary_container"),
+            selectforeground=theme.color("on_primary_container"),
+            font=theme.font("body_medium"),
             highlightthickness=0,
-            bd=0
+            borderwidth=0,
+            relief=tk.FLAT,
+            activestyle="none",
         )
         self.categories_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Заполняем список категорий
         for category in self.strategy_options.keys():
             self.categories_listbox.insert(tk.END, category)
 
-        # Bind событие выбора категории
         self.categories_listbox.bind('<<ListboxSelect>>', self.on_category_select)
 
-        # Правая колонка - варианты стратегий для выбранной категории
-        right_frame = tk.Frame(content_frame, bg='#182030')
+        # Правая колонка — варианты стратегий
+        right_frame = tk.Frame(content_frame, bg=theme.color("surface"))
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-        # Заголовок для выбранной категории
-        self.category_title = tk.Label(right_frame, text="Выберите категорию",
-                            font=("Arial", 12, "bold"), fg='white', bg='#182030')
-        self.category_title.pack(anchor=tk.W, pady=(0, 10))
+        self.category_title = tk.Label(
+            right_frame,
+            text="Выберите категорию",
+            anchor="w",
+            **theme.text("title_small"),
+        )
+        self.category_title.pack(fill=tk.X, pady=(0, theme.space("sm")))
 
-        # Контейнер для вариантов стратегий с прокруткой
-        strategies_container = tk.Frame(right_frame, bg='#182030')
+        strategies_container = tk.Frame(right_frame, bg=theme.color("surface"))
         strategies_container.pack(fill=tk.BOTH, expand=True)
 
-        # Полоса прокрутки для вариантов стратегий
-        strategies_scrollbar = tk.Scrollbar(strategies_container)
+        strategies_scrollbar = ThinScrollbar(strategies_container, command=None)
         strategies_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Canvas для прокрутки чекбоксов
         self.strategies_canvas = tk.Canvas(
             strategies_container,
-            bg='#182030',
+            bg=theme.color("surface_container_low"),
             highlightthickness=0,
-            yscrollcommand=strategies_scrollbar.set
+            borderwidth=0,
+            yscrollcommand=strategies_scrollbar.set,
         )
         self.strategies_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        strategies_scrollbar._command = self.strategies_canvas.yview
 
-        # Привязка скроллбара
-        strategies_scrollbar.config(command=self.strategies_canvas.yview)
+        self.radiobuttons_frame = tk.Frame(self.strategies_canvas, bg=theme.color("surface_container_low"))
+        self.canvas_window = self.strategies_canvas.create_window(
+            (0, 0), window=self.radiobuttons_frame, anchor="nw"
+        )
 
-        # Фрейм для радиокнопок внутри canvas
-        self.radiobuttons_frame = tk.Frame(self.strategies_canvas, bg='#182030')
-        self.canvas_window = self.strategies_canvas.create_window((0, 0), window=self.radiobuttons_frame, anchor="nw")
-
-        # Настройка прокрутки колесом мыши
         self.strategies_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
-
-        # Настройка прокрутки для Linux (Button-4 и Button-5)
         self.strategies_canvas.bind_all("<Button-4>", self._on_mousewheel_linux)
         self.strategies_canvas.bind_all("<Button-5>", self._on_mousewheel_linux)
 
-        # Обновление прокрутки при изменении размера фрейма
         self.radiobuttons_frame.bind("<Configure>", self.on_frame_configure)
-
-        # Привязка для обновления ширины фрейма при изменении размера canvas
         self.strategies_canvas.bind("<Configure>", self.on_canvas_configure)
 
-        # Словарь для хранения ссылок на радиокнопки для обновления цвета
-        self.radio_buttons = {}  # {(category, strategy_name): tk.Radiobutton}
+        self.radio_buttons = {}
 
-        # Статусная строка
         self.status_label = tk.Label(
             main_frame,
             text="",
-            font=("Arial", 10),
-            fg=self.default_status_color,
-            bg='#182030'
+            anchor="w",
+            **theme.text("body_small", fg_role="on_surface_variant"),
         )
-        self.status_label.pack(pady=(0, 10))
+        self.status_label.pack(fill=tk.X, pady=(0, theme.space("sm")))
 
-        # Фрейм для кнопок по центру
-        buttons_frame = tk.Frame(main_frame, bg='#182030')
-        buttons_frame.pack(fill=tk.X, pady=(0, 0))
+        buttons_frame = tk.Frame(main_frame, bg=theme.color("surface"))
+        buttons_frame.pack(fill=tk.X)
 
-        # Центральный контейнер для кнопок
-        center_frame = tk.Frame(buttons_frame, bg='#182030')
-        center_frame.pack(expand=True)
+        self.apply_button = filled_button(buttons_frame, "Применить", self.apply_strategies)
+        self.apply_button.pack(side=tk.LEFT, padx=(0, theme.space("sm")))
 
-        # Стиль кнопок
-        button_style = {
-            'font': ('Arial', 11),
-            'bg': '#15354D',
-            'fg': 'white',
-            'bd': 0,
-            'padx': 20,
-            'pady': 8,
-            'width': 12,
-            'highlightthickness': 0,
-            'cursor': 'hand2'
-        }
-
-        # Кнопка Применить
-        self.apply_button = create_hover_button(
-            center_frame,
-            text="Применить",
-            command=self.apply_strategies,
-            **button_style
-        )
-        self.apply_button.pack(side=tk.LEFT, padx=(0, 30))
-
-        # Кнопка Назад
-        back_button = create_hover_button(
-            center_frame,
-            text="Назад",
-            command=self.close_window,
-            **button_style
-        )
+        back_button = text_button(buttons_frame, "Назад", self.close_window)
         back_button.pack(side=tk.LEFT)
 
-        # Выбираем первую категорию по умолчанию
         if self.strategy_options:
             first_category = list(self.strategy_options.keys())[0]
             self.categories_listbox.selection_set(0)
             self.update_strategies_for_category(first_category)
 
-        # Bind событие изменения выбора радиокнопок
         self.setup_radio_bindings()
 
     def on_canvas_configure(self, event):
@@ -221,7 +186,7 @@ class CustomStrategyWindow:
                     if strategy_name == selected_strategy:
                         radio_button.config(fg=self.success_color)  # Зеленый для выбранного
                     else:
-                        radio_button.config(fg='white')  # Белый для невыбранных
+                        radio_button.config(fg=theme.color("on_surface"))
 
     def _on_mousewheel(self, event):
         """Обработка прокрутки колесом мыши (Windows/Mac)"""
@@ -270,37 +235,39 @@ class CustomStrategyWindow:
             no_strategies_label = tk.Label(
                 self.radiobuttons_frame,
                 text="Нет доступных стратегий для этой категории",
-                font=("Arial", 11),
-                fg='#8e8e93',
-                bg='#182030'
+                **theme.text("body_medium", bg_role="surface_container_low", fg_role="on_surface_variant"),
             )
-            no_strategies_label.pack(pady=20)
+            no_strategies_label.pack(pady=theme.space("lg"))
             return
 
         # Создаем радиокнопки для каждого варианта стратегии
         for strategy_name in strategies.keys():
             # Фрейм для радиокнопки
-            strategy_frame = tk.Frame(self.radiobuttons_frame, bg='#182030')
-            strategy_frame.pack(fill=tk.X, pady=6, padx=5)
+            strategy_frame = tk.Frame(self.radiobuttons_frame, bg=theme.color("surface_container_low"))
+            strategy_frame.pack(fill=tk.X, pady=theme.px(6), padx=theme.px(5))
 
-            # Определяем цвет текста: зеленый если выбрано, белый если нет
-            text_color = self.success_color if self.strategy_vars[category_name].get() == strategy_name else 'white'
+            text_color = (
+                self.success_color
+                if self.strategy_vars[category_name].get() == strategy_name
+                else theme.color("on_surface")
+            )
 
             radiobutton = tk.Radiobutton(
                 strategy_frame,
                 text=strategy_name,
                 variable=self.strategy_vars[category_name],
                 value=strategy_name,
-                bg='#182030',
-                fg=text_color,  # Устанавливаем цвет текста
-                selectcolor='#15354D',
-                activebackground='#182030',
-                activeforeground=self.success_color,  # Зеленый при наведении
-                font=("Arial", 11),
+                bg=theme.color("surface_container_low"),
+                fg=text_color,
+                selectcolor=theme.color("primary"),
+                activebackground=theme.color("surface_container_high"),
+                activeforeground=theme.color("primary"),
+                font=theme.font("body_medium"),
                 anchor=tk.W,
+                justify="left",
                 highlightthickness=0,
-                bd=0,
-                wraplength=500,
+                borderwidth=0,
+                wraplength=theme.px(520),
                 cursor='hand2'
             )
             radiobutton.pack(fill=tk.X, anchor=tk.W)
@@ -309,7 +276,7 @@ class CustomStrategyWindow:
             self.radio_buttons[(category_name, strategy_name)] = radiobutton
 
             # Добавляем разделитель
-            separator = tk.Frame(strategy_frame, height=1, bg='#1e4a6a')
+            separator = tk.Frame(strategy_frame, height=1, bg=theme.color("outline_variant"))
             separator.pack(fill=tk.X, pady=(5, 0))
 
         # Обновляем прокрутку
@@ -375,7 +342,7 @@ class CustomStrategyWindow:
 
             # Меняем состояние UI
             self.root.config(cursor="watch")
-            self.apply_button.config(state=tk.DISABLED, text="Применение...")
+            self.apply_button.config(state="disabled", text="Применение...")
             self.status_label.config(text="Сохранение стратегий...")
             self.root.update()
 
@@ -451,7 +418,7 @@ class CustomStrategyWindow:
     def reset_ui_state(self):
         """Восстанавливает состояние UI"""
         self.root.config(cursor="")
-        self.apply_button.config(state=tk.NORMAL, text="Применить")
+        self.apply_button.config(state="normal", text="Применить")
         self.status_label.config(text="", fg=self.default_status_color)
 
     def close_window(self):

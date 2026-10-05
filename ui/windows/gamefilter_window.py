@@ -4,6 +4,7 @@ import os
 import tkinter as tk
 
 from ui.components.button_styler import create_hover_button
+from ui.theme import theme
 from ui.windows.main.protocols import MainWindowActions
 from ui.components.custom_messagebox import show_info, show_error
 from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set, wait_window_safely
@@ -121,20 +122,20 @@ class GameFilterProtocolModeWindow:
         self._on_confirm = on_confirm
         self.root = tk.Toplevel(parent)
         self.root.title(title)
-        self.root.configure(bg="#182030")
+        self.root.configure(bg=theme.color("surface"))
         self.root.transient(parent)
         self.root.resizable(False, False)
         self.root.protocol("WM_DELETE_WINDOW", self._cancel)
 
-        main = tk.Frame(self.root, bg="#182030", padx=18, pady=14)
+        main = tk.Frame(self.root, bg=theme.color("surface"), padx=18, pady=14)
         main.pack(fill=tk.BOTH, expand=True)
 
         tk.Label(
             main,
             text=hint,
-            font=("Arial", 10),
-            fg="#cccccc",
-            bg="#182030",
+            font=theme.font('body_small'),
+            fg=theme.color("on_surface_variant"),
+            bg=theme.color("surface"),
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(0, 8))
 
@@ -145,17 +146,17 @@ class GameFilterProtocolModeWindow:
         )
         self._var = tk.StringVar(value=start)
         rb_style = {
-            "font": ("Arial", 10),
-            "fg": "white",
-            "bg": "#182030",
-            "selectcolor": "#1E4A6E",
-            "activebackground": "#182030",
-            "activeforeground": "#4fc3f7",
+            "font": theme.font("body_small"),
+            "fg": theme.color("on_surface"),
+            "bg": theme.color("surface"),
+            "selectcolor": theme.color("primary"),
+            "activebackground": theme.color("surface_container_high"),
+            "activeforeground": theme.color("primary"),
             "highlightthickness": 0,
             "cursor": "hand2",
             "variable": self._var,
         }
-        proto_frame = tk.Frame(main, bg="#182030")
+        proto_frame = tk.Frame(main, bg=theme.color("surface"))
         proto_frame.pack(fill=tk.X, pady=(0, 16))
         tk.Radiobutton(
             proto_frame,
@@ -177,9 +178,9 @@ class GameFilterProtocolModeWindow:
         ).pack(anchor=tk.W, pady=3)
 
         btn_style = {
-            "font": ("Arial", 11),
-            "bg": "#15354D",
-            "fg": "white",
+            "font": theme.font("label_large"),
+            "bg": theme.color("secondary_container"),
+            "fg": theme.color("on_surface"),
             "bd": 0,
             "padx": 18,
             "pady": 8,
@@ -187,7 +188,7 @@ class GameFilterProtocolModeWindow:
             "highlightthickness": 0,
             "cursor": "hand2",
         }
-        row = tk.Frame(main, bg="#182030")
+        row = tk.Frame(main, bg=theme.color("surface"))
         row.pack(fill=tk.X)
         ok_btn = create_hover_button(
             row,
@@ -243,38 +244,38 @@ class GameFilterWindow:
 
     def setup_window_properties(self):
         """Настройка свойств окна."""
-        self.root.configure(bg='#182030')
+        self.root.configure(bg=theme.color('surface'))
         self.root.transient(self.parent)
         self.root.protocol("WM_DELETE_WINDOW", self.close_window)
 
     def setup_ui(self):
         """Настройка интерфейса."""
-        main_frame = tk.Frame(self.root, bg='#182030', padx=15, pady=10)
+        main_frame = tk.Frame(self.root, bg=theme.color('surface'), padx=15, pady=10)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         title_label = tk.Label(
             main_frame,
             text="GameFilter",
-            font=("Arial", 14, "bold"),
-            fg='white',
-            bg='#182030'
+            font=theme.font('title_large'),
+            fg=theme.color('on_surface'),
+            bg=theme.color('surface')
         )
         title_label.pack(pady=(15, 8))
 
         tk.Label(
             main_frame,
             text="Отдельный GameFilter и пресет игры не используются одновременно.",
-            font=("Arial", 9),
-            fg="#aaaaaa",
-            bg="#182030",
+            font=theme.font('label_small'),
+            fg=theme.color("on_surface_variant"),
+            bg=theme.color("surface"),
             justify=tk.CENTER,
             wraplength=340,
         ).pack(pady=(0, 18))
 
         button_style = {
-            'font': ('Arial', 11),
-            'bg': '#15354D',
-            'fg': 'white',
+            'font': theme.font('label_large'),
+            'bg': theme.color('secondary_container'),
+            'fg': theme.color('on_surface'),
             'bd': 0,
             'padx': 20,
             'pady': 10,
@@ -412,35 +413,35 @@ class GamePresetWindow:
 
     def setup_window_properties(self):
         """Настройка свойств окна."""
-        self.root.configure(bg='#182030')
+        self.root.configure(bg=theme.color('surface'))
         self.root.transient(self.parent)
         self.root.protocol("WM_DELETE_WINDOW", self.close_window)
 
     def setup_ui(self):
         """Настройка интерфейса."""
-        main_frame = tk.Frame(self.root, bg='#182030', padx=15, pady=10)
+        main_frame = tk.Frame(self.root, bg=theme.color('surface'), padx=15, pady=10)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         title_label = tk.Label(
             main_frame,
             text="Включить пресет игры",
-            font=("Arial", 14, "bold"),
-            fg='white',
-            bg='#182030'
+            font=theme.font('title_large'),
+            fg=theme.color('on_surface'),
+            bg=theme.color('surface')
         )
         title_label.pack(pady=(15, 8))
 
         tk.Label(
             main_frame,
             text="При выборе пресета отдельный GameFilter будет выключен.",
-            font=("Arial", 9),
-            fg="#aaaaaa",
-            bg="#182030",
+            font=theme.font('label_small'),
+            fg=theme.color("on_surface_variant"),
+            bg=theme.color("surface"),
             justify=tk.CENTER,
             wraplength=340,
         ).pack(pady=(0, 14))
 
-        check_frame = tk.Frame(main_frame, bg='#182030')
+        check_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         check_frame.pack(fill=tk.X, pady=(0, 20))
 
         for preset_id, preset_data in GAME_PRESETS.items():
@@ -450,12 +451,12 @@ class GamePresetWindow:
                 check_frame,
                 text=preset_data["name"],
                 variable=var,
-                font=("Arial", 11),
-                fg='white',
-                bg='#182030',
-                selectcolor='#1E4A6E',
-                activebackground='#182030',
-                activeforeground='#4fc3f7',
+                font=theme.font('body_medium'),
+                fg=theme.color('on_surface'),
+                bg=theme.color('surface'),
+                selectcolor=theme.color('primary'),
+                activebackground=theme.color('surface_container_high'),
+                activeforeground=theme.color('primary'),
                 highlightthickness=0,
                 cursor='hand2',
                 command=lambda p=preset_id: self._on_preset_click(p),
@@ -463,9 +464,9 @@ class GamePresetWindow:
             cb.pack(anchor='w')
 
         button_style = {
-            'font': ('Arial', 11),
-            'bg': '#15354D',
-            'fg': 'white',
+            'font': theme.font('label_large'),
+            'bg': theme.color('secondary_container'),
+            'fg': theme.color('on_surface'),
             'bd': 0,
             'padx': 20,
             'pady': 10,
@@ -474,7 +475,7 @@ class GamePresetWindow:
             'cursor': 'hand2'
         }
 
-        buttons_frame = tk.Frame(main_frame, bg='#182030')
+        buttons_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         buttons_frame.pack(fill=tk.X, pady=(10, 0))
 
         apply_btn = create_hover_button(

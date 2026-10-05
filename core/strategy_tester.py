@@ -1295,8 +1295,59 @@ class StrategyTester:
         with open(report_path, 'w', encoding='utf-8') as f:
             f.write(html)
 
+        # Данные отчёта рядом с HTML — их читает окно отчёта в приложении.
+        try:
+            self.save_report_data(sorted_results, report_path)
+        except Exception as e:
+            print(f"⚠️ Не удалось сохранить данные отчёта (JSON): {e}")
+
         print(f"\n📄 Отчет сохранен: {report_path}")
         return str(report_path)
+
+    def save_report_data(self, results: List[Dict], report_path: Path) -> str:
+        """Сохраняет машиночитаемые данные отчёта в JSON рядом с HTML.
+
+        Окно отчёта приложения (ui/windows/report_window.py) показывает эти
+        данные нативно, без браузера.
+        """
+        modes = {str(r.get("mode", "standard")) for r in results}
+        payload = {
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "mode": next(iter(modes)) if len(modes) == 1 else "mixed",
+            "html_file": Path(report_path).name,
+            "results": [self._report_row(result) for result in results],
+        }
+        json_path = Path(report_path).with_suffix(".json")
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        return str(json_path)
+
+    @staticmethod
+    def _report_row(result: Dict) -> Dict:
+        """Компактная строка отчёта для JSON и таблицы в окне отчёта."""
+        return {
+            "name": result.get("strategy") or result.get("name") or "—",
+            "mode": result.get("mode", "standard"),
+            "success_rate": round(float(result.get("success_rate", 0) or 0), 1),
+            "successful": int(result.get("successful", 0) or 0),
+            "failed": int(result.get("failed", 0) or 0),
+            "blocked": int(result.get("blocked", 0) or 0),
+            "total": int(result.get("total_targets", 0) or 0),
+            "youtube_passed": result.get("youtube_passed"),
+            "discord_passed": result.get("discord_passed"),
+            "critical_fail": bool(result.get("critical_fail", False)),
+            "critical_fail_reason": result.get("critical_fail_reason", ""),
+            "error": result.get("error", ""),
+            "targets": [
+                {
+                    "name": t.get("target_name", "—"),
+                    "success": bool(t.get("success", False)),
+                    "blocked": bool(t.get("blocked", False)),
+                    "details": t.get("details", ""),
+                }
+                for t in result.get("target_results", []) or []
+            ],
+        }
 
     def _generate_html_report(self, results: List[Dict]) -> str:
         """Генерирует HTML содержимое отчета"""
@@ -2328,13 +2379,7 @@ class StrategyTester:
                 print(f"\n✅ Тестирование завершено!")
 
             print(f"📄 Отчет сохранен: {report_path}")
-
-            # Открываем отчет в браузере
-            try:
-                import webbrowser
-                webbrowser.open(f"file://{report_path}")
-            except Exception:
-                print("   ℹ️  Отчет можно открыть вручную")
+            print("   ℹ️  Отчёт открывается в отдельном окне приложения")
 
         elif self.stop_requested:
             print(f"\n⏹️  Тестирование остановлено")

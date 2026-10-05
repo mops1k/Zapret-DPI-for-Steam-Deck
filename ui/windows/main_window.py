@@ -5,6 +5,7 @@ import os
 import tkinter as tk
 
 from core.service_manager import ServiceManager
+from ui.theme import theme
 from ui.windows.main.main_chrome import MainChromeMixin
 from ui.windows.main.main_gamefilter import MainGameFilterMixin
 from ui.windows.main.main_service import MainServiceMixin
@@ -27,6 +28,7 @@ class MainWindow(
 
     def __init__(self) -> None:
         self.root = tk.Tk()
+        theme.attach(self.root)
         self.setup_window_properties()
         self.root.title("Zapret DPI Manager")
 
@@ -71,6 +73,30 @@ class MainWindow(
     def run(self) -> None:
         """Запускает главное окно"""
         self.root.mainloop()
+
+    def rebuild_ui(self) -> None:
+        """Пересобирает интерфейс после смены темы, сохраняя состояние окна."""
+        try:
+            self.close_settings_menu()
+        except Exception:
+            pass
+        for widget in self.root.winfo_children():
+            try:
+                widget.destroy()
+            except tk.TclError:
+                pass
+        self.settings_menu = None
+        self.settings_menu_open = False
+        self.status_tooltip = None
+        self.game_filter_tooltip = None
+        self.icon_tooltip = None
+
+        theme.apply(self.root)
+        self.setup_ui()
+        self._apply_main_window_size()
+        self.load_current_strategy()
+        self.check_service_status()
+        self.update_game_filter_indicator()
 
 
 if __name__ == "__main__":

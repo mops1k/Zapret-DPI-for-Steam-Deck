@@ -4,3 +4,5 @@ git-add-commit-loop.sh
 __pycache__/
 *.pyc
 dist/
+utils/theme.txt
+utils/reports/

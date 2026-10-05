@@ -69,9 +69,6 @@ class ZapretFileChecker:
 
             # Иконка
             self.manager_dir / "ico" / "zapret.png",
-
-            # QR код
-            self.manager_dir / "utils" / "qr.png",
         ]
 
         # Проверяемые папки
