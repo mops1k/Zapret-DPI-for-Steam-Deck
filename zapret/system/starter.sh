@@ -215,6 +215,12 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line//\{tlssochi\}/$TEMP_DIR/tls_clienthello_sochi_park.bin}"
     line="${line//\{quic4pda\}/$TEMP_DIR/quic_initial_4pda_to.bin}"
     line="${line//\{dbankcloud\}/$TEMP_DIR/quic_initial_dbankcloud_ru.bin}"
+    line="${line//\{quic5ka\}/$TEMP_DIR/quic_initial_5ka_ru.bin}"
+    line="${line//\{quicrutube\}/$TEMP_DIR/quic_initial_rutube_ru.bin}"
+    line="${line//\{quicsteam\}/$TEMP_DIR/quic_initial_steamcommunity_com.bin}"
+    line="${line//\{quictencent\}/$TEMP_DIR/quic_initial_tencent_com.bin}"
+    line="${line//\{tls5ka\}/$TEMP_DIR/tls_clienthello_5ka_ru.bin}"
+    line="${line//\{tlssferum\}/$TEMP_DIR/tls_clienthello_www_sferum_ru.bin}"
 
     # Алиасы наборов конструктора стратегий: у менеджера один общий ipset-файл
     # (ipset-all_merged) и один общий hostlist (list-general_merged).

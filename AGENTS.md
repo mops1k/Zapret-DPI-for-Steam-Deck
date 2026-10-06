@@ -52,6 +52,14 @@ CI (`.github/workflows/ci.yml`) выполняет те же шаги, кром�
 - Плейсхолдеры `{...}` в `config.txt` раскрывает `zapret/system/starter.sh`; набор
   поддерживаемых плейсхолдеров проверяет `tools/validate_strategies.py`.
 - Логи ошибок: `~/.local/state/zapret_dpi_manager/error.log` (0600, ротация).
+- Обновление по частям без полного обновления приложения (окно «Обновить Zapret», три
+  кнопки — приложение / стратегии / движок): `core/strategies_updater.py` (стратегии и
+  payload'ы из Flowseal) и `core/engine_updater.py` (движок nfqws из ImMALWARE/zapret-linux-easy).
+  Конвертация `.bat` → файл стратегии живёт в `core/flowseal_convert.py` (в релиз попадает
+  только `core/`, поэтому `tools/convert_flowseal_strategies.py` — тонкая обёртка для CI).
+  Версия стратегий — SHA коммита Flowseal в `utils/strategies_version.txt` (проверка через
+  Atom-ленту коммитов, без лимита GitHub API); бэкапы перед записью — в
+  `~/.cache/zapret_dpi_manager/`.
 
 ## Данные
 

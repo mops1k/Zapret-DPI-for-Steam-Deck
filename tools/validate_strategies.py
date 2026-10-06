@@ -47,6 +47,12 @@ PLACEHOLDER_FILES = {
     "tlssochi": "files/bin/tls_clienthello_sochi_park.bin",
     "quic4pda": "files/bin/quic_initial_4pda_to.bin",
     "dbankcloud": "files/bin/quic_initial_dbankcloud_ru.bin",
+    "quic5ka": "files/bin/quic_initial_5ka_ru.bin",
+    "quicrutube": "files/bin/quic_initial_rutube_ru.bin",
+    "quicsteam": "files/bin/quic_initial_steamcommunity_com.bin",
+    "quictencent": "files/bin/quic_initial_tencent_com.bin",
+    "tls5ka": "files/bin/tls_clienthello_5ka_ru.bin",
+    "tlssferum": "files/bin/tls_clienthello_www_sferum_ru.bin",
     "GameFilter": None,  # подставляется портами, файла нет
 }
 

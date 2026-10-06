@@ -3,7 +3,15 @@ import threading
 
 from core.manager_config import VERSION_CONFIG
 from core.zapret_updater import ZapretBundleUpdater
-from ui.components.material import LinearProgress, MaterialCard, TopAppBar, filled_button, text_button
+from ui.components.material import (
+    LinearProgress,
+    MaterialCard,
+    TopAppBar,
+    filled_button,
+    outlined_button,
+    text_button,
+    tonal_button,
+)
 from ui.theme import theme
 from core.dpi_utils import (
     center_toplevel_on_parent,
@@ -55,6 +63,8 @@ class UpdateWindow:
         )
         center_toplevel_on_parent(self.root, self.parent)
 
+        self.root.after_idle(self._refresh_source_versions)
+
         if self.pending_update:
             self.root.after_idle(self._apply_pending_update)
 
@@ -79,42 +89,9 @@ class UpdateWindow:
             )
             thread.start()
 
-        download_url = pu.get("download_url")
-        if download_url:
-            self.bundle_version = available
-            self.bundle_update_available = True
-            self.bundle_update_data = {"download_url": download_url}
-            self.update_action_button()
-        else:
-            thread = threading.Thread(
-                target=self._resolve_pending_download_url,
-                args=(available,),
-                daemon=True,
-            )
-            thread.start()
-
-    def _resolve_pending_download_url(self, version: str) -> None:
-        try:
-            bundle_version, bundle_data, check_error = self.bundle_updater.check_for_updates_detailed()
-            if bundle_version and bundle_data and bundle_data.get("download_url"):
-
-                def _apply():
-                    self.bundle_version = bundle_version
-                    self.bundle_update_available = True
-                    self.bundle_update_data = bundle_data
-                    self.update_action_button()
-
-                self._safe_after(_apply)
-            elif check_error:
-                self._safe_after(
-                    lambda err=check_error: self.log_message(
-                        f"⚠️ Не удалось проверить обновления: {err}"
-                    )
-                )
-        except Exception as e:
-            self._safe_after(
-                lambda err=e: self.log_message(f"⚠️ Не удалось подготовить обновление: {err}"),
-            )
+        self.update_application(
+            preloaded_version=available, preloaded_url=pu.get("download_url")
+        )
 
     def _fetch_and_log_notes_thread(self, version: str) -> None:
         try:
@@ -145,7 +122,7 @@ class UpdateWindow:
         self.app_bar = TopAppBar(
             main_frame,
             title="Обновление",
-            subtitle="Полный пакет: менеджер и служба Zapret",
+            subtitle="Приложение, стратегии и движок — по отдельности",
             bg_role="surface",
         )
         self.app_bar.pack(fill=tk.X, pady=(0, theme.space("md")))
@@ -157,10 +134,26 @@ class UpdateWindow:
             anchor="w",
             **theme.text("body_medium", fg_role="success"),
         )
-        self.version_label.pack(fill=tk.X, pady=(0, theme.space("md")))
+        self.version_label.pack(fill=tk.X, pady=(0, theme.space("sm")))
 
-        self.action_btn = filled_button(main_frame, "Проверить обновления", self.check_or_update)
-        self.action_btn.pack(anchor=tk.CENTER, pady=(0, theme.space("md")))
+        self.source_version_label = tk.Label(
+            main_frame,
+            text="",
+            anchor="w",
+            **theme.text("body_small", fg_role="on_surface_variant"),
+        )
+        self.source_version_label.pack(fill=tk.X, pady=(0, theme.space("md")))
+
+        self.app_btn = filled_button(main_frame, "Обновить приложение", self.update_application)
+        self.app_btn.pack(anchor=tk.CENTER, pady=(0, theme.space("xs")))
+
+        self.strategies_btn = tonal_button(
+            main_frame, "Обновить стратегии", self.update_strategies
+        )
+        self.strategies_btn.pack(anchor=tk.CENTER, pady=(0, theme.space("xs")))
+
+        self.engine_btn = outlined_button(main_frame, "Обновить движок", self.update_engine)
+        self.engine_btn.pack(anchor=tk.CENTER, pady=(0, theme.space("md")))
 
         log_card = MaterialCard(main_frame, variant="elevated", title="Лог обновлений")
         log_card.pack(fill=tk.X)
@@ -210,6 +203,138 @@ class UpdateWindow:
         except (tk.TclError, RuntimeError):
             pass
 
+    # --- три отдельные операции обновления -----------------------------------
+
+    def _set_buttons_state(self, enabled: bool):
+        """Блокирует или разблокирует все кнопки окна."""
+        state = tk.NORMAL if enabled else tk.DISABLED
+        for button in (self.app_btn, self.strategies_btn, self.engine_btn):
+            try:
+                button.config(state=state)
+            except tk.TclError:
+                pass
+
+    def _refresh_source_versions(self):
+        """Показывает локальные версии стратегий и движка nfqws."""
+        try:
+            from core.engine_updater import NfqwsUpdater, read_version
+            from core.strategies_updater import FlowsealStrategiesUpdater
+
+            sha = FlowsealStrategiesUpdater().local_version()
+            strategies = f"стратегии: {sha[:8]}" if sha else "стратегии: версия неизвестна"
+
+            updater = NfqwsUpdater()
+            binary = updater.installed_binary()
+            if not binary.is_file():
+                binary = updater.local_binary()
+            version = read_version(binary) if binary.is_file() else None
+            engine = f"движок nfqws: {version}" if version else "движок nfqws: не установлен"
+
+            text = f"{strategies} · {engine}"
+        except Exception as e:
+            text = f"версии недоступны: {e}"
+
+        def _apply():
+            try:
+                if self.root.winfo_exists():
+                    self.source_version_label.config(text=text)
+            except tk.TclError:
+                pass
+
+        self._safe_after(_apply)
+
+    def _source_progress(self, message, percent=None):
+        """Прогресс операции в общий лог."""
+        if percent is not None:
+            self.log_message(f"   [{percent}%] {message}")
+        else:
+            self.log_message(f"   {message}")
+
+    def update_application(self, preloaded_version=None, preloaded_url=None):
+        """Проверяет обновление приложения и, если оно есть, обновляет полный пакет."""
+        self._set_buttons_state(False)
+        if preloaded_url is None:
+            self.clear_log()
+
+        thread = threading.Thread(
+            target=self._update_application_thread,
+            args=(preloaded_version, preloaded_url),
+            daemon=True,
+        )
+        thread.start()
+
+    def _update_application_thread(self, preloaded_version=None, preloaded_url=None):
+        try:
+            if preloaded_url:
+                self.bundle_version = preloaded_version
+                self.bundle_update_available = True
+                self.bundle_update_data = {"download_url": preloaded_url}
+                self.log_message(f"📦 Обновление приложения до v{preloaded_version}...")
+            else:
+                self.log_message("🔍 Проверка обновлений приложения...")
+                version, info, error = self.bundle_updater.check_for_updates_detailed()
+                if error:
+                    self.log_message(f"❌ Не удалось проверить обновления: {error}")
+                    return
+                if not version:
+                    self.log_message("🎉 Установлена последняя версия")
+                    return
+                self.bundle_version = version
+                self.bundle_update_available = True
+                self.bundle_update_data = info
+                self.log_message(f"📢 Доступно обновление: v{version}")
+                self._log_release_notes_from_api(version)
+
+            self._update_all_thread()
+        except Exception as e:
+            self.log_message(f"❌ Ошибка обновления приложения: {e}")
+        finally:
+            self._safe_after(lambda: self._set_buttons_state(True))
+
+    def update_strategies(self):
+        """Обновляет только стратегии и payload'ы из Flowseal."""
+        self._set_buttons_state(False)
+        self.clear_log()
+        thread = threading.Thread(target=self._update_strategies_thread, daemon=True)
+        thread.start()
+
+    def _update_strategies_thread(self):
+        try:
+            from core.strategies_updater import FlowsealStrategiesUpdater
+
+            self.log_message("🔄 Обновление стратегий из Flowseal...")
+            report = FlowsealStrategiesUpdater(progress_callback=self._source_progress).update(
+                apply=True
+            )
+            for line in FlowsealStrategiesUpdater.format_report(report):
+                self.log_message(line)
+            self._safe_after(self._refresh_source_versions)
+        except Exception as e:
+            self.log_message(f"❌ Ошибка обновления стратегий: {e}")
+        finally:
+            self._safe_after(lambda: self._set_buttons_state(True))
+
+    def update_engine(self):
+        """Обновляет только движок nfqws."""
+        self._set_buttons_state(False)
+        self.clear_log()
+        thread = threading.Thread(target=self._update_engine_thread, daemon=True)
+        thread.start()
+
+    def _update_engine_thread(self):
+        try:
+            from core.engine_updater import NfqwsUpdater
+
+            self.log_message("🔄 Проверка движка nfqws...")
+            report = NfqwsUpdater(progress_callback=self._source_progress).update(apply=True)
+            for line in NfqwsUpdater.format_report(report):
+                self.log_message(line)
+            self._safe_after(self._refresh_source_versions)
+        except Exception as e:
+            self.log_message(f"❌ Ошибка обновления движка: {e}")
+        finally:
+            self._safe_after(lambda: self._set_buttons_state(True))
+
     def clear_log(self):
         """Очищает лог"""
         self.log_text.delete(1.0, tk.END)
@@ -222,75 +347,6 @@ class UpdateWindow:
             append_release_notes_to_log(self.log_message, version, notes)
         except Exception as e:
             self.log_message(f"⚠️ Не удалось загрузить описание релиза: {e}")
-
-    def check_or_update(self):
-        """Проверяет обновления или выполняет обновление"""
-        if not self.bundle_update_available:
-            self.check_updates()
-        else:
-            self.show_update_dialog()
-
-    def check_updates(self):
-        """Проверяет обновления для всех компонентов"""
-        self.action_btn.config(state=tk.DISABLED, text="Проверка...")
-        self.clear_log()
-
-        thread = threading.Thread(target=self._check_updates_thread)
-        thread.daemon = True
-        thread.start()
-
-    def _check_updates_thread(self):
-        """Поток для проверки обновлений"""
-        try:
-            self.log_message("🔍 Начинаю проверку обновлений...")
-
-            bundle_version, bundle_data, check_error = self.bundle_updater.check_for_updates_detailed()
-            if bundle_version:
-                self.bundle_update_available = True
-                self.bundle_version = bundle_version
-                self.bundle_update_data = bundle_data
-                self.log_message(f"📢 Доступно полное обновление: v{bundle_version}")
-                self._log_release_notes_from_api(bundle_version)
-                self._safe_after(self.update_action_button)
-            elif check_error:
-                self.bundle_update_available = False
-                self.bundle_update_data = None
-                self.bundle_version = None
-                self.log_message(f"\n❌ Не удалось проверить обновления: {check_error}")
-            else:
-                self.bundle_update_available = False
-                self.bundle_update_data = None
-                self.bundle_version = None
-                self.log_message("\n🎉 Установлена последняя версия")
-
-        except Exception as e:
-            self.log_message(f"❌ Ошибка при проверке обновлений: {str(e)}")
-        finally:
-            self._safe_after(lambda: self.action_btn.config(state=tk.NORMAL))
-
-    def update_action_button(self):
-        """Обновляет текст и действие кнопки"""
-        if self.bundle_update_available:
-            self.action_btn.config(
-                text=f"Обновить до v{self.bundle_version}",
-                command=self.show_update_dialog,
-            )
-        else:
-            self.action_btn.config(
-                text="Проверить обновления",
-                command=self.check_or_update,
-            )
-
-    def show_update_dialog(self):
-        """Запускает обновление полного пакета"""
-        if not self.bundle_update_available:
-            return
-
-        self.action_btn.config(state=tk.DISABLED, text="Обновление...")
-
-        thread = threading.Thread(target=self._update_all_thread)
-        thread.daemon = True
-        thread.start()
 
     def _update_all_thread(self):
         """Поток для обновления полного пакета"""
@@ -326,16 +382,13 @@ class UpdateWindow:
 
             if success_count > 0:
                 self._safe_after(self.restart_manager)
-            else:
-                self._safe_after(self.update_action_button)
 
         except Exception as e:
             self.log_message(f"❌ Ошибка при обновлении: {str(e)}")
             import traceback
             traceback.print_exc()
         finally:
-            self._safe_after(lambda: self.action_btn.config(state=tk.NORMAL))
-            self._safe_after(self.update_action_button)
+            self._safe_after(lambda: self._set_buttons_state(True))
 
     def restart_manager(self):
         """Перезапускает менеджер и закрывает окна, если они ещё живы."""
