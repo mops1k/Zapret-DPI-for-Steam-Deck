@@ -134,7 +134,7 @@ class StrategyTesterWindow:
         ).pack(side=tk.LEFT, padx=(0, t.space("lg")))
         MaterialRadio(
             mode_row,
-            "YouTube/Discord",
+            "YouTube/Discord/Telegram",
             variable=self.mode_var,
             value="YouTube/Discord",
         ).pack(side=tk.LEFT)
@@ -367,38 +367,35 @@ class StrategyTesterWindow:
             if results and len(results) > 0:
                 # Классифицируем стратегии в зависимости от режима
                 if mode == "YouTube/Discord":
-                    # РЕЖИМ YouTube/Discord - классификация только по критическим тестам
-                    good_results = []      # Оба работают
-                    partial_results = []   # Только один работает
-                    bad_results = []       # Оба не работают
+                    # РЕЖИМ YouTube/Discord/Telegram - классификация по критическим тестам
+                    good_results = []      # Все проверенные сервисы работают
+                    partial_results = []   # Часть сервисов работает
+                    bad_results = []       # Ни один не работает
 
                     for result in results:
-                        youtube_passed = result.get('youtube_passed', False)
-                        discord_passed = result.get('discord_passed', False)
-                        success_rate = result.get('success_rate', 0)
+                        services = (
+                            ("YouTube", result.get('youtube_passed')),
+                            ("Discord", result.get('discord_passed')),
+                            ("Telegram", result.get('telegram_passed')),
+                        )
+                        checked = [(label, value) for label, value in services if value is not None]
+                        working = [label for label, value in checked if value is True]
+                        failed = [label for label, value in checked if value is not True]
 
-                        if youtube_passed is True and discord_passed is True:
-                            # Оба работают - хорошая стратегия
+                        if checked and not failed:
                             good_results.append(result)
                             result["status"] = "good"
-                        elif (youtube_passed is True and discord_passed is False) or \
-                            (youtube_passed is False and discord_passed is True):
-                            # Только один работает - частичная стратегия
+                        elif working:
                             partial_results.append(result)
                             result["status"] = "partial"
-
-                            # Определяем причину частичной работы
-                            if youtube_passed and not discord_passed:
-                                result["partial_reason"] = "YouTube работает, Discord нет"
-                            elif not youtube_passed and discord_passed:
-                                result["partial_reason"] = "Discord работает, YouTube нет"
+                            result["partial_reason"] = (
+                                f"{', '.join(working)} работает, {', '.join(failed)} нет"
+                            )
                         else:
-                            # Оба не работают или не проверялись - плохая стратегия
                             bad_results.append(result)
                             result["status"] = "bad"
-
-                            if youtube_passed is False and discord_passed is False:
-                                result["bad_reason"] = "YouTube и Discord не работают"
+                            if failed:
+                                result["bad_reason"] = f"{', '.join(failed)} не работают"
                             else:
                                 result["bad_reason"] = "Не удалось определить статус"
                 else:
@@ -411,25 +408,30 @@ class StrategyTesterWindow:
                         success_rate = result.get('success_rate', 0)
                         youtube_passed = result.get('youtube_passed', False)
                         discord_passed = result.get('discord_passed', False)
+                        telegram_passed = result.get('telegram_passed')
                         critical_fail = result.get('critical_fail', False)
                         critical_reason = result.get('critical_fail_reason', '')
 
                         if success_rate >= 60:
-                            if youtube_passed and discord_passed:
+                            checked = [("YouTube", youtube_passed), ("Discord", discord_passed)]
+                            if telegram_passed is not None:
+                                checked.append(("Telegram", telegram_passed))
+                            working = [label for label, value in checked if value is True]
+                            failed = [label for label, value in checked if value is not True]
+
+                            if not failed:
                                 good_results.append(result)
                                 result["status"] = "good"
-                            elif youtube_passed or discord_passed:
+                            elif working:
                                 partial_results.append(result)
                                 result["status"] = "partial"
-                                # Определяем причину частичной работы
-                                if youtube_passed and not discord_passed:
-                                    result["partial_reason"] = "YouTube работает, Discord нет"
-                                elif not youtube_passed and discord_passed:
-                                    result["partial_reason"] = "Discord работает, YouTube нет"
+                                result["partial_reason"] = (
+                                    f"{', '.join(working)} работает, {', '.join(failed)} нет"
+                                )
                             else:
                                 bad_results.append(result)
                                 result["status"] = "bad"
-                                result["bad_reason"] = "YouTube и Discord не работают"
+                                result["bad_reason"] = f"{', '.join(failed)} не работают"
                         else:
                             bad_results.append(result)
                             result["status"] = "bad"
@@ -455,20 +457,28 @@ class StrategyTesterWindow:
                     # Показываем детали по частичным стратегиям
                     if partial_results:
                         self.log_message("\n📊 ЧАСТИЧНО РАБОЧИЕ СТРАТЕГИИ:", "#ffb74d")
-                        youtube_only = [r for r in partial_results if r.get('youtube_passed', False) and not r.get('discord_passed', False)]
-                        discord_only = [r for r in partial_results if not r.get('youtube_passed', False) and r.get('discord_passed', False)]
+                        service_keys = (
+                            ("YouTube", "youtube_passed"),
+                            ("Discord", "discord_passed"),
+                            ("Telegram", "telegram_passed"),
+                        )
 
-                        if youtube_only:
-                            best_youtube = max(youtube_only, key=lambda x: x.get('success_rate', 0))
-                            yt_name = best_youtube.get('strategy', 'Неизвестная')
-                            yt_rate = best_youtube.get('success_rate', 0)
-                            self.log_message(f"   Только YouTube: {yt_name} ({yt_rate:.1f}%)", "#ffb74d")
-
-                        if discord_only:
-                            best_discord = max(discord_only, key=lambda x: x.get('success_rate', 0))
-                            dc_name = best_discord.get('strategy', 'Неизвестная')
-                            dc_rate = best_discord.get('success_rate', 0)
-                            self.log_message(f"   Только Discord: {dc_name} ({dc_rate:.1f}%)", "#ffb74d")
+                        for label, key in service_keys:
+                            only = [
+                                r for r in partial_results
+                                if r.get(key) is True
+                                and sum(
+                                    1 for _label, other_key in service_keys
+                                    if r.get(other_key) is True
+                                ) == 1
+                            ]
+                            if only:
+                                best = max(only, key=lambda x: x.get('success_rate', 0))
+                                self.log_message(
+                                    f"   Только {label}: {best.get('strategy', 'Неизвестная')} "
+                                    f"({best.get('success_rate', 0):.1f}%)",
+                                    "#ffb74d",
+                                )
                 else:
                     # Стандартный режим - старая статистика
                     self.log_message(f"📊 Полностью рабочих: {len(good_results)}", "#30d158" if good_results else "#ff9500")

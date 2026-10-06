@@ -36,6 +36,8 @@ USER_FILES=(
     ./files/lists/list-exclude_user.txt
     ./files/lists/ipset-all_user.txt
     ./files/lists/ipset-exclude_user.txt
+    ./files/lists/list-telegram_user.txt
+    ./files/lists/ipset-telegram_user.txt
 )
 
 EXCLUDES=(--exclude='__pycache__' --exclude='*.pyc')

@@ -56,14 +56,21 @@ def classify(result: Dict, mode: str) -> tuple:
     rate = float(result.get("success_rate", 0) or 0)
     youtube = result.get("youtube_passed")
     discord = result.get("discord_passed")
+    telegram = result.get("telegram_passed")
 
-    if mode in ("YouTube/Discord", "mixed") or youtube is not None or discord is not None:
-        if youtube is True and discord is True:
-            return ("working", *VERDICTS["working"])
-        if youtube is False and discord is False:
-            return ("failed", *VERDICTS["failed"])
-        if youtube is None and discord is None:
+    if (
+        mode in ("YouTube/Discord", "mixed")
+        or youtube is not None
+        or discord is not None
+        or telegram is not None
+    ):
+        values = [value for value in (youtube, discord, telegram) if value is not None]
+        if not values:
             return ("unknown", *VERDICTS["unknown"])
+        if all(value is True for value in values):
+            return ("working", *VERDICTS["working"])
+        if all(value is not True for value in values):
+            return ("failed", *VERDICTS["failed"])
         return ("partial", *VERDICTS["partial"])
     if mode == "dpi":
         return ("working", *VERDICTS["working"]) if rate >= 60 else ("failed", *VERDICTS["failed"])
@@ -157,6 +164,7 @@ def _parse_html_report(path: Path, note: str = "") -> ReportData:
                 "success_rate": round(rate, 1),
                 "youtube_passed": None,
                 "discord_passed": None,
+                "telegram_passed": None,
                 "targets": [],
             }
         )
@@ -304,6 +312,7 @@ class ReportWindow:
                 ("rate", "Успех", 80),
                 ("youtube", "YouTube", 90),
                 ("discord", "Discord", 90),
+                ("telegram", "Telegram", 90),
                 ("verdict", "Вердикт", 130),
             ],
             height=10,
@@ -403,6 +412,7 @@ class ReportWindow:
                     f"{float(result.get('success_rate', 0) or 0):.1f}%",
                     _flag(result.get("youtube_passed")),
                     _flag(result.get("discord_passed")),
+                    _flag(result.get("telegram_passed")),
                     verdict_label,
                 ),
                 iid=str(len(self._rows) - 1),
@@ -433,7 +443,9 @@ class ReportWindow:
             f"успешно: {result.get('successful', '—')}   "
             f"ошибок: {result.get('failed', '—')}   "
             f"блокировок: {result.get('blocked', '—')}",
-            f"YouTube: {_flag(result.get('youtube_passed'))}    Discord: {_flag(result.get('discord_passed'))}",
+            f"YouTube: {_flag(result.get('youtube_passed'))}    "
+            f"Discord: {_flag(result.get('discord_passed'))}    "
+            f"Telegram: {_flag(result.get('telegram_passed'))}",
         ]
         reason = result.get("critical_fail_reason") or ""
         if reason:

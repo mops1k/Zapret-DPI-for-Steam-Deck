@@ -149,6 +149,14 @@ merge_unique_lists \
     "$TEMP_DIR/ipset-all_merged.txt" \
     "$TEMP_DIR/ipset-all.txt" \
     "$TEMP_DIR/ipset-all_user.txt"
+merge_unique_lists \
+    "$TEMP_DIR/list-telegram_merged.txt" \
+    "$TEMP_DIR/list-telegram.txt" \
+    "$TEMP_DIR/list-telegram_user.txt"
+merge_unique_lists \
+    "$TEMP_DIR/ipset-telegram_merged.txt" \
+    "$TEMP_DIR/ipset-telegram.txt" \
+    "$TEMP_DIR/ipset-telegram_user.txt"
 
 # ПРОВЕРЯЕМ НАЛИЧИЕ ФАЙЛА gamefilter.enable В ИСХОДНОЙ ПАПКЕ
 GAME_FILTER_TCP_VALUE="12"  # значение по умолчанию для TCP
@@ -202,6 +210,10 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line//\{ipset_all\}/$TEMP_DIR/ipset-all_merged.txt}"
     line="${line//\{ipset_all_user\}/$TEMP_DIR/ipset-all_merged.txt}"
     line="${line//\{ipset_exclude_user\}/$TEMP_DIR/ipset-exclude_merged.txt}"
+    line="${line//\{list_telegram\}/$TEMP_DIR/list-telegram_merged.txt}"
+    line="${line//\{list_telegram_user\}/$TEMP_DIR/list-telegram_merged.txt}"
+    line="${line//\{ipset_telegram\}/$TEMP_DIR/ipset-telegram_merged.txt}"
+    line="${line//\{ipset_telegram_user\}/$TEMP_DIR/ipset-telegram_merged.txt}"
     line="${line//\{list_general_user\}/$TEMP_DIR/list-general_merged.txt}"
     line="${line//\{list_exclude_user\}/$TEMP_DIR/list-exclude_merged.txt}"
     line="${line//\{gw\}/$TEMP_DIR/gw.txt}"
@@ -232,7 +244,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line//\{ipset_dns\}/$TEMP_DIR/ipset-all_merged.txt}"
     line="${line//\{cloudflare_ipset\}/$TEMP_DIR/ipset-all_merged.txt}"
     line="${line//\{discord\}/$TEMP_DIR/list-general_merged.txt}"
-    line="${line//\{telegram\}/$TEMP_DIR/list-general_merged.txt}"
+    line="${line//\{telegram\}/$TEMP_DIR/list-telegram_merged.txt}"
     line="${line//\{youtube\}/$TEMP_DIR/list-general_merged.txt}"
     line="${line//\{rutracker\}/$TEMP_DIR/list-general_merged.txt}"
     line="${line//\{hosts\}/$TEMP_DIR/list-general_merged.txt}"

@@ -14,6 +14,14 @@ DiscordGateway          = "https://discord.com/api/v9/gateway"
 DiscordCDN              = "https://cdn.discordapp.com"
 DiscordUpdates          = "https://updates.discord.com"
 
+### Telegram
+TelegramWeb             = "https://web.telegram.org"
+TelegramAPI             = "https://api.telegram.org"
+TelegramTMe             = "https://t.me"
+TelegramCore            = "https://core.telegram.org"
+TelegramCDN             = "https://cdn.telesco.pe"
+TelegramDC              = "PING:149.154.167.220"
+
 ### Rutracker
 Rutracker             = "http://rutracker.org"
 

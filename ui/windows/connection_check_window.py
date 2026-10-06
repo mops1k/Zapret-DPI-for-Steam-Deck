@@ -53,7 +53,7 @@ class ConnectionCheckWindow:
         self.app_bar = TopAppBar(
             main_frame,
             title="Проверка сетевого соединения",
-            subtitle="Шлюз, интернет, YouTube и Discord",
+            subtitle="Шлюз, интернет, YouTube, Discord и Telegram",
             bg_role="surface",
         )
         self.app_bar.pack(fill=tk.X, pady=(0, theme.space("md")))
@@ -208,7 +208,13 @@ class ConnectionCheckWindow:
             if not self.checking:
                 return
 
-           # 5. Итоги
+            # 5. Проверка Telegram
+            self.check_telegram()
+
+            if not self.checking:
+                return
+
+           # 6. Итоги
             self.show_summary()
 
         except Exception as e:
@@ -422,6 +428,79 @@ class ConnectionCheckWindow:
                 self.log_message(f"❌ Discord не работает! Попробуйте другую стратегию", "#ff3b30")
         else:
             self.log_message(f"ℹ️  Нет результатов проверки Discord", "#8e8e93")
+
+        self.log_message("")
+
+    def check_telegram(self):
+        """Проверка Telegram через curl"""
+        self.log_message("🔍 ПРОВЕРКА ДОСТУПА К TELEGRAM:", "#0a84ff")
+
+        telegram_tests = [
+            {"name": "web.telegram.org", "url": "https://web.telegram.org/"},
+            {"name": "api.telegram.org", "url": "https://api.telegram.org/"},
+            {"name": "t.me", "url": "https://t.me/"},
+            {"name": "core.telegram.org", "url": "https://core.telegram.org/"},
+        ]
+
+        telegram_results = []
+
+        for test in telegram_tests:
+            if not self.checking:
+                return
+
+            self.log_message(f"  Тест: {test['name']}", "#8e8e93")
+
+            command = [
+                "curl",
+                "-I",
+                "--connect-timeout", "5",
+                "--max-time", "10",
+                "--silent",
+                "--show-error",
+                "--location",
+                "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                test["url"],
+            ]
+
+            try:
+                result = subprocess.run(command, capture_output=True, text=True, timeout=15)
+                first_line = (result.stdout or "").splitlines()[0] if result.stdout else ""
+                parts = first_line.split()
+                status = parts[1] if len(parts) > 1 else ""
+
+                if result.returncode == 0 and status and status[0] in "23":
+                    self.log_message(f"  ✅ {test['name']}: HTTP {status}", "#30d158")
+                    self.results.append(("Telegram", test['name'], True))
+                    telegram_results.append(True)
+                else:
+                    self.log_message(f"  ❌ {test['name']}: нет ответа", "#ff3b30")
+                    self.results.append(("Telegram", test['name'], False))
+                    telegram_results.append(False)
+            except Exception as e:
+                self.log_message(f"  ❌ {test['name']}: {str(e)}", "#ff3b30")
+                self.results.append(("Telegram", test['name'], False))
+                telegram_results.append(False)
+
+        self.log_message("")
+        if telegram_results:
+            successful_tests = sum(1 for result in telegram_results if result)
+            total_tests = len(telegram_results)
+
+            self.log_message("=" * 40, "#0a84ff")
+            self.log_message("🔍 АНАЛИЗ РЕЗУЛЬТАТОВ TELEGRAM:", "#0a84ff")
+            self.log_message("=" * 40, "#0a84ff")
+
+            if successful_tests == total_tests:
+                self.log_message("✅ Telegram разблокирован и должен работать!", "#30d158")
+            elif successful_tests > 0:
+                self.log_message(
+                    f"  ⚠️ Telegram частично доступен ({successful_tests}/{total_tests} тестов)",
+                    "#ff9500",
+                )
+            else:
+                self.log_message("❌ Telegram не работает! Попробуйте другую стратегию", "#ff3b30")
+        else:
+            self.log_message("ℹ️  Нет результатов проверки Telegram", "#8e8e93")
 
         self.log_message("")
 

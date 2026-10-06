@@ -27,6 +27,7 @@ class HostlistSettingsWindow:
         self.list_general_file = os.path.join(self.manager_dir, "files", "lists", "list-general.txt")
         self.list_general_user_file_file = os.path.join(self.manager_dir, "files", "lists", "list-general_user.txt")
         self.list_exclude_user_file = os.path.join(self.manager_dir, "files", "lists", "list-exclude_user.txt")
+        self.list_telegram_user_file = os.path.join(self.manager_dir, "files", "lists", "list-telegram_user.txt")
 
         # Данные для предустановленных сервисов
         self.services = {
@@ -63,6 +64,22 @@ class HostlistSettingsWindow:
                 "raw.gitlab.com",
                 "snippets.gitlab.com",
                 "git.sr.ht"
+            ],
+            # Telegram-домены сохраняются в отдельный файл list-telegram_user.txt:
+            # их читает стратегия обхода Telegram ({list_telegram_user}).
+            "Telegram": [
+                "telegram.org",
+                "telegram.me",
+                "telegram.dog",
+                "telegram.space",
+                "t.me",
+                "telegra.ph",
+                "graph.org",
+                "telesco.pe",
+                "tg.dev",
+                "cdn-telegram.org",
+                "telegram-cdn.org",
+                "comments.app"
             ]
         }
 
@@ -70,6 +87,8 @@ class HostlistSettingsWindow:
         self.whatsapp_var = tk.BooleanVar()
         self.rockstar_var = tk.BooleanVar()
         self.github_var = tk.BooleanVar()
+        self.telegram_var = tk.BooleanVar()
+        self.telegram_rules_var = tk.BooleanVar()
 
         # Переменные для текстовых полей вкладок
         self.blocked_text_input = None
@@ -315,9 +334,66 @@ class HostlistSettingsWindow:
             print(f"Ошибка загрузки файла list-general.txt: {e}")
             self.existing_domains = []
 
+        # Telegram-домены хранятся отдельно, в list-telegram_user.txt
+        try:
+            telegram_selected = False
+            if os.path.exists(self.list_telegram_user_file):
+                with open(self.list_telegram_user_file, 'r', encoding='utf-8') as f:
+                    telegram_domains = {line.strip() for line in f if line.strip()}
+                telegram_selected = bool(telegram_domains & set(self.services["Telegram"]))
+            self.telegram_var.set(telegram_selected)
+        except Exception as e:
+            print(f"Ошибка загрузки файла list-telegram_user.txt: {e}")
+
+        # Обход Telegram включён, если в config.txt есть Telegram-строки
+        try:
+            self.telegram_rules_var.set(
+                any(self._is_telegram_rule(line) for line in self._read_config_lines())
+            )
+        except Exception as e:
+            print(f"Ошибка чтения config.txt для обхода Telegram: {e}")
+
+    def _config_path(self):
+        return os.path.join(self.manager_dir, "config.txt")
+
+    @staticmethod
+    def _is_telegram_rule(line: str) -> bool:
+        """Строка config.txt, относящаяся к обходу Telegram."""
+        return "{list_telegram}" in line or "{ipset_telegram}" in line
+
+    def _read_config_lines(self):
+        path = self._config_path()
+        if not os.path.exists(path):
+            return []
+        with open(path, 'r', encoding='utf-8') as f:
+            return [line.rstrip('\n') for line in f]
+
+    def apply_telegram_rules(self, enabled: bool) -> int:
+        """Включает или выключает обход Telegram в config.txt.
+
+        :return: сколько Telegram-строк осталось в конфиге
+        """
+        from core.flowseal_convert import manager_extra_rules
+
+        lines = [line for line in self._read_config_lines() if not self._is_telegram_rule(line)]
+        if enabled:
+            existing = set(lines)
+            for rule in manager_extra_rules():
+                if rule not in existing:
+                    lines.append(rule)
+
+        while lines and not lines[-1].strip():
+            lines.pop()
+
+        os.makedirs(os.path.dirname(self._config_path()), exist_ok=True)
+        with open(self._config_path(), 'w', encoding='utf-8') as f:
+            if lines:
+                f.write("\n".join(lines) + "\n")
+
+        return len([line for line in lines if self._is_telegram_rule(line)])
+
     def validate_domain(self, domain_str):
         """Проверяет корректность доменного имени"""
-
         # Комментарий
         if domain_str.strip().startswith('#'):
             return True, ""
@@ -521,6 +597,22 @@ class HostlistSettingsWindow:
                 for domain in sorted_domains:
                     f.write(f"{domain}\n")
 
+            # Telegram-домены пишем в отдельный файл list-telegram_user.txt:
+            # его подставляет стратегия обхода Telegram ({list_telegram_user}).
+            telegram_file = self.list_telegram_user_file
+            os.makedirs(os.path.dirname(telegram_file), exist_ok=True)
+            with open(telegram_file, 'w', encoding='utf-8') as f:
+                if self.telegram_var.get():
+                    for domain in sorted(self.services["Telegram"]):
+                        f.write(f"{domain}\n")
+
+            # Синхронизируем строки обхода Telegram в config.txt
+            telegram_rules_count = 0
+            try:
+                telegram_rules_count = self.apply_telegram_rules(self.telegram_rules_var.get())
+            except Exception as exc:
+                print(f"Не удалось обновить строки обхода Telegram в config.txt: {exc}")
+
             # Показываем статистику
             selected_services = []
             if self.whatsapp_var.get():
@@ -529,6 +621,8 @@ class HostlistSettingsWindow:
                 selected_services.append("Rockstar/Epic Games")
             if self.github_var.get():
                 selected_services.append("Github")
+            if self.telegram_var.get():
+                selected_services.append("Telegram")
 
             services_text = ", ".join(selected_services) if selected_services else "ни одного сервиса"
 
@@ -539,7 +633,12 @@ class HostlistSettingsWindow:
                     f"Данные успешно сохранены! Выбранные сервисы: {services_text}. "
                     f"Всего доменов в list-general.txt: {len(sorted_domains)}. "
                     f"Заблокированные домены: {blocked_count} (сохранено в list-general_user.txt). "
-                    f"Незаблокированные домены: {unblocked_count} (сохранено в list-exclude_user.txt)."
+                    f"Незаблокированные домены: {unblocked_count} (сохранено в list-exclude_user.txt). "
+                    f"Telegram-домены: {'включены' if self.telegram_var.get() else 'выключены'} "
+                    f"(list-telegram_user.txt). "
+                    f"Обход Telegram в config.txt: "
+                    f"{'включён' if self.telegram_rules_var.get() else 'выключен'} "
+                    f"({telegram_rules_count} строк)."
                 ),
             )
 
@@ -722,7 +821,8 @@ class HostlistSettingsWindow:
             left_frame,
             text=(
                 "Выбрать предустановленные сервисы для фильтрации. "
-                "Домены сервисов будут прописаны в файл list-general.txt."
+                "Домены сервисов будут прописаны в файл list-general.txt, "
+                "а домены Telegram — в list-telegram_user.txt (стратегия обхода Telegram)."
             ),
             font=self._font("Arial", 10),
             fg=theme.color('on_surface_variant'),
@@ -789,10 +889,38 @@ class HostlistSettingsWindow:
                                        activeforeground=theme.color('primary'))
         github_check.pack(anchor=tk.W, pady=(0, self._s(5)))
 
+        # Чекбокс Telegram (домены идут в list-telegram_user.txt)
+        telegram_check = tk.Checkbutton(checkboxes_frame,
+                                       text="Telegram",
+                                       variable=self.telegram_var,
+                                       font=self._font("Arial", 11),
+                                       fg=theme.color('on_surface'),
+                                       bg=theme.color('surface'),
+                                       selectcolor=theme.color('surface'),
+                                       activebackground=theme.color('surface_container_high'),
+                                       highlightthickness=0,
+                                       activeforeground=theme.color('primary'))
+        telegram_check.pack(anchor=tk.W, pady=(0, self._s(5)))
+
+        # Переключатель обхода Telegram в config.txt (TCP-домены, TCP-IP и звонки)
+        telegram_rules_check = tk.Checkbutton(checkboxes_frame,
+                                       text="Обход Telegram (TCP + звонки)",
+                                       variable=self.telegram_rules_var,
+                                       font=self._font("Arial", 11),
+                                       fg=theme.color('on_surface'),
+                                       bg=theme.color('surface'),
+                                       selectcolor=theme.color('surface'),
+                                       activebackground=theme.color('surface_container_high'),
+                                       highlightthickness=0,
+                                       activeforeground=theme.color('primary'))
+        telegram_rules_check.pack(anchor=tk.W, pady=(self._s(8), self._s(5)))
+
         self._hl_checkbuttons = (
             whatsapp_check,
             rockstar_check,
             github_check,
+            telegram_check,
+            telegram_rules_check,
         )
 
 

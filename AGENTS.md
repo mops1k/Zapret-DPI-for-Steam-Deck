@@ -67,11 +67,26 @@ CI (`.github/workflows/ci.yml`) выполняет те же шаги, кром�
   и сохраняется в `files/strategy/` с записью в `config.txt`. Опции без аналога в nfqws
   (`-o/-q/-r/-A/-a/-m/-Y/-T/-L/-u/-y`) не переносятся — окно предупреждает о них перед
   применением. Проверка конвертера — `tools/check_bbdpi_convert.py` (шаг CI).
+- Обход Telegram: `core/flowseal_convert.manager_extra_rules()` добавляет каждой стратегии
+  три правила — TCP по hostlist `{list_telegram}` (веб-версия, `t.me`, API), TCP по ipset
+  `{ipset_telegram}` (Telegram Desktop ходит на дата-центры MTProto без SNI, hostlist его
+  не поймает) и UDP-звонки (`--filter-l7=stun`). hostlist и ipset в nfqws — разные группы
+  фильтров и объединяются по AND (bol-van/zapret#2084), поэтому это отдельные правила.
+  Плейсхолдер `{telegram}` (конструктор стратегий) ведёт на Telegram-список.
+  Цели Telegram — в `utils/test_targets.txt` (критические: `TelegramWeb`, `TelegramAPI`),
+  тестер оценивает их как третий сервис рядом с YouTube/Discord. В окне hostlist — галочки
+  «Telegram» (домены в `list-telegram_user.txt`) и «Обход Telegram (TCP + звонки)»
+  (добавляет/убирает Telegram-строки в `config.txt`); в окне IPSet — вкладка
+  «Диапазоны Telegram» (`ipset-telegram_user.txt`); в «Проверке соединения» — блок Telegram.
 
 ## Данные
 
 - `files/strategy/` — готовые стратегии (по строке на правило, `--new` в конце строки).
 - `files/lists/` — домены/IP; `*_user.txt` — пользовательские, обновление их не перезаписывает.
+  Telegram: `list-telegram.txt` (домены) и `ipset-telegram.txt` (официальные CIDR IPv4+IPv6);
+  пользовательские дополнения — `list-telegram_user.txt` и `ipset-telegram_user.txt`;
+  подставляются плейсхолдерами `{list_telegram}`, `{list_telegram_user}`, `{ipset_telegram}`,
+  `{ipset_telegram_user}` (сливаются base+user, как остальные пары).
 - `files/bin/` — payload-бинарники; `zapret/bins/<arch>/nfqws` — движок (исполняемый бит обязателен).
 - `core/strategy_data.py` (`STRATEGY_OPTIONS`) — варианты конструктора стратегии;
   `core/game_presets.py` (`GAME_PRESETS`) — игровые пресеты.

@@ -28,6 +28,8 @@ class ManagerUpdater(BaseUpdater):
             "files/lists/ipset-exclude_user.txt",
             "files/lists/list-exclude_user.txt",
             "files/lists/list-general_user.txt",
+            "files/lists/list-telegram_user.txt",
+            "files/lists/ipset-telegram_user.txt",
         ]
 
         self.exclude_paths = [

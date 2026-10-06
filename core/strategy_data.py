@@ -94,6 +94,9 @@ STRATEGY_OPTIONS = {
     },
 
     "Telegram TCP": {
+        "Telegram hostlist (web/API)": "--filter-tcp=80,443,5222 --hostlist={list_telegram} --hostlist={list_telegram_user} --ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} --dpi-desync=multisplit --dpi-desync-split-pos=1 --new",
+        "Telegram ipset (Desktop MTProto)": "--filter-tcp=80,443,5222 --ipset={ipset_telegram} --ipset={ipset_telegram_user} --ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} --dpi-desync=multisplit --dpi-desync-split-pos=1 --new",
+        "Telegram fake+multisplit": "--filter-tcp=80,443,5222 --hostlist={list_telegram} --hostlist={list_telegram_user} --ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} --dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=md5sig --dpi-desync-repeats=6 --dpi-desync-fake-tls={tlsgoogle} --new",
         "Flowseal general (09.2026)": "--filter-tcp=80,443 --hostlist={list_general} --hostlist={list_general_user} --hostlist-exclude={list_exclude} --hostlist-exclude={list_exclude_user} --ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} --dpi-desync=multisplit --dpi-desync-split-seqovl=568 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern={tls4pda} --new",
         "YTDisBystro 3.4v1 (all ports)": "--filter-tcp=80,443 --hostlist={telegram} --dpi-desync=multisplit --dpi-desync-split-seqovl=211 --dpi-desync-split-seqovl-pattern={tlsgoogle} --new",
         "multidisorder seqovl 211 & pattern 5": "--filter-tcp=80,443 --hostlist={telegram} --dpi-desync=multidisorder --dpi-desync-split-seqovl=211 --dpi-desync-split-seqovl-pattern={tlsgoogle} --new",
@@ -114,6 +117,7 @@ STRATEGY_OPTIONS = {
     },
 
     "Telegram Call": {
+        "Telegram звонки STUN (ipset)": "--filter-udp=443,1400,50000-50100 --filter-l7=stun --ipset={ipset_telegram} --ipset={ipset_telegram_user} --ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fake-stun={stun} --new",
         "Dronator 4.3": "--filter-udp=1400 --filter-l7=stun --dpi-desync=fake --dpi-desync-fake-stun=0x00 --new",
         "general (altv2) 1.6.1": "--filter-udp=1400 --filter-l7=stun --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fake-quic={quicgoogle} --new",
         "fake 8 google": "--filter-udp=1400 --filter-l7=stun --dpi-desync=fake --dpi-desync-repeats=8 --dpi-desync-fake-quic={quicgoogle} --new",

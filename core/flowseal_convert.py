@@ -17,8 +17,10 @@ main.py/core/ui/files/ico/utils/zapret — каталог tools/ туда не �
   * пути %LISTS%/%BIN% заменяются плейсхолдерами {list_general}/{tlsgoogle}/…,
     которые раскрывает zapret/system/starter.sh;
   * сохраняются доработки менеджера: --ipset={ipset_all_user} рядом с
-    --ipset={ipset_all}, а ACTIVE_DISCORD_UDP.bin/ACTIVE_GAME_UDP.bin
+    --ipset={ipset_all}, ACTIVE_DISCORD_UDP.bin/ACTIVE_GAME_UDP.bin
     (их готовит service.bat) маппятся на существующий {dbankcloud};
+  * каждой стратегии добавляются правила обхода Telegram (manager_extra_rules):
+    TCP по hostlist {list_telegram}, TCP по ipset {ipset_telegram} и UDP-звонки;
   * проверяется, что не осталось %-путей, кавычек, «^» и неизвестных
     плейсхолдеров (неизвестные означают, что стратегия несовместима с
     локальным starter.sh).
@@ -111,6 +113,44 @@ FLOWSEAL_LIST_FILES = (
     "ipset-exclude.txt",
 )
 
+# Доработка менеджера: обход блокировок Telegram. Добавляется каждой стратегии,
+# чтобы Telegram работал при любом выбранном пресете.
+#   * TCP по домену — веб-версия, t.me, API (hostlist работает по SNI/Host);
+#   * TCP по IP — Telegram Desktop ходит на дата-центры MTProto без SNI,
+#     поэтому нужен ipset официальных подсетей;
+#   * UDP — звонки (STUN).
+# hostlist и ipset в nfqws — разные смысловые группы и объединяются по AND
+# (bol-van/zapret#2084), поэтому это отдельные правила, а не одно.
+TELEGRAM_TCP_HOSTLIST_RULE = (
+    "--filter-tcp=80,443,5222 "
+    "--hostlist={list_telegram} --hostlist={list_telegram_user} "
+    "--ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} "
+    "--dpi-desync=multisplit --dpi-desync-split-pos=1 --new"
+)
+
+TELEGRAM_TCP_IPSET_RULE = (
+    "--filter-tcp=80,443,5222 "
+    "--ipset={ipset_telegram} --ipset={ipset_telegram_user} "
+    "--ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} "
+    "--dpi-desync=multisplit --dpi-desync-split-pos=1 --new"
+)
+
+TELEGRAM_UDP_CALLS_RULE = (
+    "--filter-udp=443,1400,50000-50100 --filter-l7=stun "
+    "--ipset={ipset_telegram} --ipset={ipset_telegram_user} "
+    "--ipset-exclude={ipset_exclude} --ipset-exclude={ipset_exclude_user} "
+    "--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fake-stun={stun} --new"
+)
+
+
+def manager_extra_rules() -> list[str]:
+    """Правила, которые менеджер добавляет к каждой сконвертированной стратегии."""
+    return [
+        TELEGRAM_TCP_HOSTLIST_RULE,
+        TELEGRAM_TCP_IPSET_RULE,
+        TELEGRAM_UDP_CALLS_RULE,
+    ]
+
 
 def package_root() -> Path:
     """Корень пакета менеджера: core/ лежит в его корне и в репозитории, и на клиенте."""
@@ -177,6 +217,7 @@ def convert_command(command: str) -> list[str]:
         if index < len(rules) - 1:
             rule = f"{rule} --new"
         result.append(rule)
+    result.extend(manager_extra_rules())
     return result
 
 

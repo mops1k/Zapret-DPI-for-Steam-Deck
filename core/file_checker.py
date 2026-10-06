@@ -87,7 +87,7 @@ class ZapretFileChecker:
         # завышенные пороги приводили к бесконечному «восстановлению»).
         self.min_files_in_dir = {
             self.manager_dir / "files" / "bin": 9,
-            self.manager_dir / "files" / "lists": 11,
+            self.manager_dir / "files" / "lists": 15,
             self.manager_dir / "files" / "strategy": 22,
             self.manager_dir / "core": 20,
             self.manager_dir / "ico": 1,

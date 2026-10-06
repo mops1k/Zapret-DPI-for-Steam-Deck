@@ -25,11 +25,13 @@ class IpsetSettingsWindow:
 
         self.blocked_text_input = None
         self.unblocked_text_input = None
+        self.telegram_text_input = None
 
         # Пути к файлам
         self.manager_dir = os.path.expanduser("~/Zapret_DPI_Manager")
         self.ipset_all_user_file = os.path.join(self.manager_dir, "files", "lists", "ipset-all_user.txt")
         self.ipset_exclude_user_file = os.path.join(self.manager_dir, "files", "lists", "ipset-exclude_user.txt")
+        self.ipset_telegram_user_file = os.path.join(self.manager_dir, "files", "lists", "ipset-telegram_user.txt")
 
     def validate_ip_address(self, ip_str):
         """Проверяет корректность IP-адреса, диапазона или подсети (IPv4 и IPv6)."""
@@ -119,13 +121,39 @@ class IpsetSettingsWindow:
                             f"Обнаружены ошибки в незаблокированных IP. Данные не сохранены:\n\n{error_text}")
                     return
 
+            # Сохраняем диапазоны Telegram
+            telegram_data = ""
+            if self.telegram_text_input is not None:
+                telegram_data = self.telegram_text_input.get("1.0", tk.END).strip()
+
+            if telegram_data:
+                lines = telegram_data.split('\n')
+                error_lines = []
+
+                for i, line in enumerate(lines, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    is_valid, error_msg = self.validate_ip_address(line)
+                    if not is_valid:
+                        error_lines.append(f"Строка {i}: {line} - {error_msg}")
+
+                if error_lines:
+                    error_text = "\n".join(error_lines)
+                    show_info(self.window, "Ошибка в данных",
+                            f"Обнаружены ошибки в диапазонах Telegram. Данные не сохранены:\n\n{error_text}")
+                    return
+
             # Сохраняем данные
             self.write_to_file(blocked_data, self.ipset_all_user_file)
             self.write_to_file(unblocked_data, self.ipset_exclude_user_file)
+            self.write_to_file(telegram_data, self.ipset_telegram_user_file)
 
             # Считаем количество IP
             blocked_count = len([line for line in blocked_data.split('\n') if line.strip() and not line.strip().startswith('#')]) if blocked_data else 0
             unblocked_count = len([line for line in unblocked_data.split('\n') if line.strip() and not line.strip().startswith('#')]) if unblocked_data else 0
+            telegram_count = len([line for line in telegram_data.split('\n') if line.strip() and not line.strip().startswith('#')]) if telegram_data else 0
 
             show_info(
                 self.window,
@@ -133,7 +161,8 @@ class IpsetSettingsWindow:
                 (
                     f"Данные успешно сохранены! "
                     f"Заблокированные IP: {blocked_count} (сохранено в ipset-all_user.txt). "
-                    f"Незаблокированные IP: {unblocked_count} (сохранено в ipset-exclude_user.txt)."
+                    f"Незаблокированные IP: {unblocked_count} (сохранено в ipset-exclude_user.txt). "
+                    f"Диапазоны Telegram: {telegram_count} (сохранено в ipset-telegram_user.txt)."
                 ),
             )
 
@@ -175,6 +204,17 @@ class IpsetSettingsWindow:
                         self.unblocked_text_input.insert("1.0", content)
         except Exception as e:
             print(f"Ошибка загрузки файла ipset-exclude_user.txt: {e}")
+
+        # Загружаем диапазоны Telegram из ipset-telegram_user.txt
+        try:
+            if os.path.exists(self.ipset_telegram_user_file):
+                with open(self.ipset_telegram_user_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if self.telegram_text_input:
+                        self.telegram_text_input.delete("1.0", tk.END)
+                        self.telegram_text_input.insert("1.0", content)
+        except Exception as e:
+            print(f"Ошибка загрузки файла ipset-telegram_user.txt: {e}")
 
     def create_hover_button(self, parent, text, command, **kwargs):
         """Создает кнопку в стиле главного меню с эффектом наведения"""
@@ -396,7 +436,17 @@ class IpsetSettingsWindow:
             "ipset-exclude_user.txt"
         )
         notebook.add(unblocked_frame, text="Незаблокированный")
-        self._ip_tab_refs = (br, ur)
+
+        telegram_frame, self.telegram_text_input, tr = self.create_text_tab(
+            notebook,
+            "Диапазоны Telegram",
+            "Дополнительные подсети Telegram сохраняются в файле ipset-telegram_user.txt "
+            "(используются стратегией обхода Telegram). Официальные подсети уже в "
+            "files/lists/ipset-telegram.txt.",
+            "ipset-telegram_user.txt"
+        )
+        notebook.add(telegram_frame, text="Диапазоны Telegram")
+        self._ip_tab_refs = (br, ur, tr)
 
         buttons_frame = tk.Frame(main_frame, bg=theme.color('surface'))
         buttons_frame.grid(row=3, column=0, sticky="ew", pady=(0, self._s(10)))
