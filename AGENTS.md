@@ -18,6 +18,7 @@ python3 -m compileall -q core ui tools main.py
 bash -n zapret/system/starter.sh zapret/system/stopper.sh installer/install_zapret.sh
 python3 tools/validate_strategies.py --dry-run     # плейсхолдеры, формат, nfqws --dry-run
 python3 tools/convert_flowseal_strategies.py --check
+python3 tools/check_bbdpi_convert.py               # конвертер BB DPI (ciadpi) → nfqws + dry-run
 ruff check core ui tools main.py                   # конфиг в pyproject.toml
 XAUTHORITY=$(ls /run/user/1000/xauth_* | head -1) python3 tools/smoke_ui_material.py  # дымовой тест всех окон
 ```
@@ -60,6 +61,12 @@ CI (`.github/workflows/ci.yml`) выполняет те же шаги, кром�
   Версия стратегий — SHA коммита Flowseal в `utils/strategies_version.txt` (проверка через
   Atom-ленту коммитов, без лимита GitHub API); бэкапы перед записью — в
   `~/.cache/zapret_dpi_manager/`.
+- Стратегии из BB DPI (движок ciadpi, hufrea/byedpi): `core/bbdpi_convert.py` переводит
+  строку ciadpi в аргументы nfqws, окно `ui/windows/bbdpi_strategy_window.py` открывается
+  из «Сменить стратегию» → «Стратегия из BB DPI». Результат проверяется `nfqws --dry-run`
+  и сохраняется в `files/strategy/` с записью в `config.txt`. Опции без аналога в nfqws
+  (`-o/-q/-r/-A/-a/-m/-Y/-T/-L/-u/-y`) не переносятся — окно предупреждает о них перед
+  применением. Проверка конвертера — `tools/check_bbdpi_convert.py` (шаг CI).
 
 ## Данные
 

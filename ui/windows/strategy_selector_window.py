@@ -20,6 +20,7 @@ from ui.components.material import (
 from ui.theme import theme
 from ui.windows.strategy_window import StrategyWindow
 from ui.windows.custom_strategy_window import CustomStrategyWindow
+from ui.windows.bbdpi_strategy_window import BBDpiStrategyWindow
 from ui.windows.strategy_tester_window import StrategyTesterWindow
 
 
@@ -324,7 +325,7 @@ class StrategySelectorWindow:
         self.app_bar = TopAppBar(
             main_frame,
             title="Сменить стратегию",
-            subtitle="Автоподбор, готовая стратегия или свой пресет",
+            subtitle="Автоподбор, готовая стратегия, свой пресет или строка BB DPI",
             bg_role="surface",
         )
         self.app_bar.pack(fill=tk.X, pady=(0, t.space("md")))
@@ -348,6 +349,14 @@ class StrategySelectorWindow:
         )
         custom_button.pack(fill=tk.X, pady=(0, t.space("sm")))
 
+        bbdpi_button = MaterialButton(
+            main_frame,
+            text="Стратегия из BB DPI",
+            command=self.open_bbdpi_strategy,
+            variant="outlined",
+        )
+        bbdpi_button.pack(fill=tk.X, pady=(0, t.space("sm")))
+
         MaterialDivider(main_frame).pack(fill=tk.X, pady=t.space("sm"))
 
         back_button = text_button(main_frame, "Назад", self.close_window)
@@ -370,6 +379,12 @@ class StrategySelectorWindow:
         self.close_window()
         custom_window = CustomStrategyWindow(self.parent)
         custom_window.run()
+
+    def open_bbdpi_strategy(self):
+        """Открывает окно конвертации строки стратегии BB DPI"""
+        self.close_window()
+        bbdpi_window = BBDpiStrategyWindow(self.parent)
+        bbdpi_window.run()
 
     def close_window(self):
         """Закрывает окно"""

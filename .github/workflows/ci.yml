@@ -36,5 +36,8 @@ jobs:
       - name: Flowseal conversion matches files/strategy
         run: python tools/convert_flowseal_strategies.py --check
 
+      - name: BB DPI conversion (ciadpi -> nfqws, dry-run)
+        run: python tools/check_bbdpi_convert.py
+
       - name: Lint (ruff)
         run: ruff check core ui tools main.py

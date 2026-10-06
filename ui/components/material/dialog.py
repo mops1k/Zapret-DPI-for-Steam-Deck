@@ -5,14 +5,15 @@
 """
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Tuple
-
 import tkinter as tk
+import tkinter.font as tkfont
+from typing import List, Optional, Sequence, Tuple
 
 from core.dpi_utils import place_toplevel_centered_on_parent, safe_grab_set, wait_window_safely
 from ui.theme import theme
 
 from .button import MaterialButton
+from .scroll import ThinScrollbar, bind_mousewheel
 
 #: Вид диалога -> (роль иконки, глиф).
 KINDS = {
@@ -22,6 +23,66 @@ KINDS = {
     "error": ("error", "✕"),
     "question": ("primary", "❓"),
 }
+
+
+def _text_block(
+    parent: tk.Misc,
+    text: str,
+    *,
+    font_role: str,
+    fg_role: str,
+    bg_role: str,
+    wraplength: int,
+    max_lines: int,
+    pady: int = 0,
+) -> tk.Frame:
+    """Текстовый блок диалога: автовысота, при переполнении — прокрутка.
+
+    Длинные сообщения (например, список неперенесённых опций) больше не
+    растягивают диалог: текст ограничен по высоте, ряд кнопок остаётся
+    видимым, а содержимое прокручивается колесом или ползунком.
+    """
+    font = tkfont.Font(font=theme.font(font_role))
+    char_width = max(1, font.measure("0"))
+    columns = max(24, int(wraplength / char_width))
+
+    container = tk.Frame(parent, bg=theme.color(bg_role))
+    container.pack(fill=tk.X, pady=pady)
+    widget = tk.Text(
+        container,
+        wrap="word",
+        width=columns,
+        height=1,
+        relief=tk.FLAT,
+        borderwidth=0,
+        highlightthickness=0,
+        bg=theme.color(bg_role),
+        fg=theme.color(fg_role),
+        font=font,
+        padx=0,
+        pady=0,
+        cursor="arrow",
+        spacing1=0,
+        spacing2=0,
+        spacing3=0,
+    )
+    widget.pack(side=tk.LEFT, fill=tk.X, expand=True)
+    widget.insert("1.0", text)
+    widget.configure(state="disabled")
+    # Оценка числа строк: диалог ещё скрыт, поэтому Tk не знает ширину виджета
+    # и подсчёт displaylines даёт мусор — считаем по длине абзацев.
+    total = 0
+    for paragraph in text.split("\n"):
+        total += max(1, -(-len(paragraph) // columns))
+    if total > max_lines:
+        widget.configure(height=max_lines)
+        scrollbar = ThinScrollbar(container, command=widget.yview, bg_role=bg_role)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y, padx=(theme.space("xs"), 0))
+        widget.configure(yscrollcommand=scrollbar.set)
+        bind_mousewheel(widget, lambda step: widget.yview_scroll(step, "units"))
+    else:
+        widget.configure(height=max(total, 1))
+    return container
 
 
 class MaterialDialog(tk.Toplevel):
@@ -53,6 +114,18 @@ class MaterialDialog(tk.Toplevel):
         self._default = default if default is not None else self._buttons_spec[-1][1]
         self._kind = kind if kind in KINDS else "info"
 
+        # Длинный текст — шире окно и ограниченная высота блока сообщения,
+        # иначе ряд кнопок уезжает за нижнюю границу экрана.
+        if len(message) > 160 or len(detail) > 160:
+            width = max(width, 480)
+            wraplength = max(wraplength, 440)
+        try:
+            screen_height = self.winfo_screenheight()
+        except tk.TclError:
+            screen_height = 800
+        line_height = max(1, tkfont.Font(font=theme.font("body_medium")).metrics("linespace"))
+        max_lines = max(6, min(14, int((screen_height * 0.35) / line_height)))
+
         self.title(title)
         self.configure(bg=theme.color("surface"))
         self.resizable(False, False)
@@ -83,26 +156,27 @@ class MaterialDialog(tk.Toplevel):
         title_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         body = tk.Frame(card, bg=theme.color("surface_container_high"))
-        body.pack(fill=tk.BOTH, expand=True, padx=theme.space("lg"))
-        message_label = tk.Label(
+        body.pack(fill=tk.X, padx=theme.space("lg"))
+        _text_block(
             body,
-            text=message,
-            anchor="w",
-            justify="left",
-            wraplength=theme.px(wraplength),
-            **theme.text("body_medium", bg_role="surface_container_high"),
+            message,
+            font_role="body_medium",
+            fg_role="on_surface",
+            bg_role="surface_container_high",
+            wraplength=wraplength,
+            max_lines=max_lines,
         )
-        message_label.pack(fill=tk.X)
         if detail:
-            detail_label = tk.Label(
+            _text_block(
                 body,
-                text=detail,
-                anchor="w",
-                justify="left",
-                wraplength=theme.px(wraplength),
-                **theme.text("body_small", bg_role="surface_container_high", fg_role="on_surface_variant"),
+                detail,
+                font_role="body_small",
+                fg_role="on_surface_variant",
+                bg_role="surface_container_high",
+                wraplength=wraplength,
+                max_lines=max(3, max_lines // 2),
+                pady=(theme.space("sm"), 0),
             )
-            detail_label.pack(fill=tk.X, pady=(theme.space("sm"), 0))
 
         actions = tk.Frame(card, bg=theme.color("surface_container_high"))
         actions.pack(fill=tk.X, padx=theme.space("lg"), pady=theme.space("lg"))

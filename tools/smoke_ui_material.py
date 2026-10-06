@@ -172,6 +172,7 @@ def main() -> int:
 
     # --- Окна стратегий и тестера ---
     from ui.windows.custom_strategy_window import CustomStrategyWindow
+    from ui.windows.bbdpi_strategy_window import BBDpiStrategyWindow
     from ui.windows.strategy_selector_window import (
         AutoSelectionWindow,
         StrategySelectionWindow,
@@ -186,6 +187,7 @@ def main() -> int:
         StrategySelectionWindow,
         StrategyWindow,
         CustomStrategyWindow,
+        BBDpiStrategyWindow,
     ):
         check(cls.__name__, lambda c=cls: c(root), lambda w: getattr(w, "root", None))
 
