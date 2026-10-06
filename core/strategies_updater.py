@@ -267,6 +267,11 @@ class FlowsealStrategiesUpdater:
                 report["errors"].append("в архиве Flowseal не найден корень репозитория")
                 return report
 
+            if apply:
+                # Полное обновление приложения обновляет только /opt/zapret,
+                # поэтому локальная копия скриптов службы может отставать.
+                self._sync_system_from_opt()
+
             allowed = known_placeholders(self._local_starter())
             strategies, skipped = self._convert_strategies(source_root, allowed)
             report["strategies_skipped"] = skipped
@@ -360,9 +365,37 @@ class FlowsealStrategiesUpdater:
         return candidates[0] if candidates else None
 
     def _local_starter(self) -> Path:
-        """Локальный starter.sh (в установке), иначе — из пакета рядом с core/."""
-        local = self.system_dir / "starter.sh"
-        return local if local.is_file() else starter_path()
+        """Актуальный starter.sh: сначала действующий /opt/zapret, затем установка, затем пакет.
+
+        Полное обновление приложения копирует zapret/ только в /opt/zapret
+        (ManagerUpdater исключает этот каталог), поэтому локальная копия в
+        ~/Zapret_DPI_Manager может быть старше и не знать новых плейсхолдеров.
+        """
+        for candidate in (self.opt_dir / "starter.sh", self.system_dir / "starter.sh"):
+            if candidate.is_file():
+                return candidate
+        return starter_path()
+
+    def _sync_system_from_opt(self) -> list[str]:
+        """Подтягивает локальную копию скриптов службы из /opt/zapret, если она отстала."""
+        synced: list[str] = []
+        for name in SYSTEM_FILES:
+            installed = self.opt_dir / name
+            if not installed.is_file():
+                continue
+            try:
+                installed_text = installed.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            local = self.system_dir / name
+            try:
+                if local.is_file() and local.read_text(encoding="utf-8", errors="replace") == installed_text:
+                    continue
+            except OSError:
+                pass
+            _write_text_atomic(local, installed_text)
+            synced.append(name)
+        return synced
 
     def _convert_strategies(
         self, source_root: Path, allowed: set[str]
