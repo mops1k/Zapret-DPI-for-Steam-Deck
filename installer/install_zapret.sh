@@ -1117,6 +1117,41 @@ WantedBy=multi-user.target"
     MAIN_SCRIPT="$TARGET_DIR/main.py"
     ICON_PATH="$TARGET_DIR/ico/zapret.png"
 
+    # Каталог рабочего стола: сперва XDG-настройка (xdg-user-dir DESKTOP),
+    # затем известные имена. Ярлык создаётся при первой установке обязательно,
+    # каталог при отсутствии создаётся (в Game Mode его может не быть).
+    resolve_desktop_dir() {
+        local candidate=""
+        if command -v xdg-user-dir >/dev/null 2>&1; then
+            candidate="$(xdg-user-dir DESKTOP 2>/dev/null || true)"
+        fi
+        if [ -n "$candidate" ] && [ "$candidate" != "$CURRENT_HOME" ] && [ "$candidate" != "$CURRENT_HOME/" ]; then
+            echo "$candidate"
+            return 0
+        fi
+        for candidate in "$CURRENT_HOME/Desktop" "$CURRENT_HOME/Рабочий стол" "$CURRENT_HOME/desktop"; do
+            if [ -d "$candidate" ]; then
+                echo "$candidate"
+                return 0
+            fi
+        done
+        echo "$CURRENT_HOME/Desktop"
+    }
+
+    # Владелец ярлыка: при запуске от root (sudo) файлы принадлежат root,
+    # поэтому после создания отдаём их реальному пользователю.
+    fix_shortcut_owner() {
+        if [ "$(id -u)" -eq 0 ]; then
+            chown "$CURRENT_USER:$CURRENT_USER" "$@" 2>/dev/null || true
+        fi
+    }
+
+    # Ярлык актуален, если указывает на текущий main.py; иначе перезаписываем.
+    shortcut_is_current() {
+        local path="$1"
+        [ -f "$path" ] && grep -qF "Exec=python3 \"$MAIN_SCRIPT\"" "$path" 2>/dev/null
+    }
+
     if [ -f "$MAIN_SCRIPT" ]; then
         DESKTOP_CONTENT="[Desktop Entry]
 Encoding=UTF-8
@@ -1137,32 +1172,41 @@ X-GNOME-UsesNotifications=true
 InitialPreference=9
 "
 
-        DESKTOP_PATHS=(
-            "$CURRENT_HOME/Рабочий стол/Zapret_DPI_Manager.desktop"
-            "$CURRENT_HOME/Desktop/Zapret_DPI_Manager.desktop"
-            "$CURRENT_HOME/desktop/Zapret_DPI_Manager.desktop"
-        )
+        DESKTOP_DIR="$(resolve_desktop_dir)"
+        if [ ! -d "$DESKTOP_DIR" ]; then
+            echo "# Каталог рабочего стола отсутствует, создаём: $DESKTOP_DIR"
+            mkdir -p "$DESKTOP_DIR"
+            fix_shortcut_owner "$DESKTOP_DIR"
+        fi
 
-        for desktop_path in "${DESKTOP_PATHS[@]}"; do
-            desktop_dir=$(dirname "$desktop_path")
-            if [ -d "$desktop_dir" ] && [ ! -f "$desktop_path" ]; then
-                echo "$DESKTOP_CONTENT" > "$desktop_path"
-                chmod 755 "$desktop_path"
-                echo "Ярлык создан: $desktop_path"
+        DESKTOP_PATH="$DESKTOP_DIR/Zapret_DPI_Manager.desktop"
+        if [ -d "$DESKTOP_DIR" ]; then
+            if shortcut_is_current "$DESKTOP_PATH"; then
+                echo "Ярлык уже актуален: $DESKTOP_PATH"
+            else
+                echo "$DESKTOP_CONTENT" > "$DESKTOP_PATH"
+                echo "Ярлык создан: $DESKTOP_PATH"
             fi
-        done
+            chmod 755 "$DESKTOP_PATH"
+            fix_shortcut_owner "$DESKTOP_PATH"
+        else
+            echo "Внимание: не удалось создать каталог рабочего стола: $DESKTOP_DIR" >&2
+        fi
 
         APPS_DIR="$CURRENT_HOME/.local/share/applications"
         APPS_PATH="$APPS_DIR/Zapret_DPI_Manager.desktop"
 
-        if [ ! -f "$APPS_PATH" ]; then
-            mkdir -p "$APPS_DIR"
+        mkdir -p "$APPS_DIR"
+        if shortcut_is_current "$APPS_PATH"; then
+            echo "Ярлык в меню приложений уже актуален: $APPS_PATH"
+        else
             echo "$DESKTOP_CONTENT" > "$APPS_PATH"
-            chmod 644 "$APPS_PATH"
-            if command -v update-desktop-database &> /dev/null; then
-                update-desktop-database "$APPS_DIR" 2>/dev/null || true
-            fi
             echo "Ярлык в меню приложений создан: $APPS_PATH"
+        fi
+        chmod 644 "$APPS_PATH"
+        fix_shortcut_owner "$APPS_PATH"
+        if command -v update-desktop-database &> /dev/null; then
+            update-desktop-database "$APPS_DIR" 2>/dev/null || true
         fi
     else
         echo "Внимание: основной скрипт не найден: $MAIN_SCRIPT"
